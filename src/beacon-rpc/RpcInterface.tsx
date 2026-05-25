@@ -37,4 +37,23 @@ export default interface RpcInterface {
     getSavedLocations(): Promise<SavedLocationsResponse>;
     getSettings(): Promise<GetSettingsResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
+    call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
+}
+
+export abstract class BaseRPC implements RpcInterface {
+    abstract getDeviceInformation(): Promise<DeviceInformation>;
+    abstract call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
+
+    getSavedMessages(): Promise<SavedMessagesResponse> {
+        return this.call('GetSavedMessages');
+    }
+    getSavedLocations(): Promise<SavedLocationsResponse> {
+        return this.call('GetSavedLocations');
+    }
+    getSettings(): Promise<GetSettingsResponse> {
+        return this.call('GetSettings');
+    }
+    getDisplayContents(): Promise<DisplayContentsResponse> {
+        return this.call('GetDisplayContents');
+    }
 }

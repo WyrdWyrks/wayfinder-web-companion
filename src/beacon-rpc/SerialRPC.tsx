@@ -1,8 +1,8 @@
 /// <reference types="w3c-web-serial" />
 /// RPC over web serial API
 
-import type { DeviceInformation, SavedMessagesResponse, SavedLocationsResponse, GetSettingsResponse, DisplayContentsResponse } from "./RpcInterface";
-import type RpcInterface from "./RpcInterface";
+import type { DeviceInformation } from "./RpcInterface";
+import { BaseRPC } from "./RpcInterface";
 
 export async function connectToSerialDevice(): Promise<SerialRPC> {
     const port = await navigator.serial.requestPort();
@@ -10,12 +10,13 @@ export async function connectToSerialDevice(): Promise<SerialRPC> {
     return new SerialRPC(port);
 }
 
-class SerialRPC implements RpcInterface {
+class SerialRPC extends BaseRPC {
     serial: SerialPort;
     writer: WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>;
     reader: ReadableStreamDefaultReader<string>;
 
     constructor(serial: SerialPort) {
+        super();
         this.serial = serial;
 
         if (!this.serial.readable) {
@@ -34,42 +35,22 @@ class SerialRPC implements RpcInterface {
     }
 
     async getDeviceInformation(): Promise<DeviceInformation> {
-        return (await this._performRpcCall('GetSystemInfo')) as DeviceInformation;
+        return this.call('GetSystemInfo');
     }
 
-    async getSavedMessages(): Promise<SavedMessagesResponse> {
-        return (await this._performRpcCall('GetSavedMessages')) as SavedMessagesResponse;
-    }
-
-    async getSavedLocations(): Promise<SavedLocationsResponse> {
-        return (await this._performRpcCall('GetSavedLocations')) as SavedLocationsResponse;
-    }
-
-    async getSettings(): Promise<GetSettingsResponse> {
-        return (await this._performRpcCall('GetSettings')) as GetSettingsResponse;
-    }
-
-    async getDisplayContents(): Promise<DisplayContentsResponse> {
-        return (await this._performRpcCall('GetDisplayContents'));
-    }
-
-    async _performRpcCall(functionName: string, params: any = {}): Promise<any> {
-        const body = {
-            'F': functionName,
-            ...params,
-        };
+    async call<T>(functionName: string, params: Record<string, unknown> = {}): Promise<T> {
+        const body = { 'F': functionName, ...params };
         const data = "RPC-->" + JSON.stringify(body) + "\n";
 
         const encoder = new TextEncoder();
         await this.writer.write(encoder.encode(data));
 
         while (true) {
-            const data = (await this.reader.read()).value;
-            console.log("Read " + data);
+            const line = (await this.reader.read()).value;
+            console.log("Read " + line);
 
-            if (data?.startsWith("RPC<--")) {
-                const res = JSON.parse(data?.replace("RPC<--", ""));
-                return res;
+            if (line?.startsWith("RPC<--")) {
+                return JSON.parse(line.replace("RPC<--", "")) as T;
             }
         }
     }
