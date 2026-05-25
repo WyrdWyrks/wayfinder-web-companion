@@ -30,6 +30,22 @@ export type DisplayContentsResponse = {
     buffer: string,
 }
 
+export type AddSavedMessageRequest = {
+    Message: string;
+}
+
+export type DeleteSavedMessageRequest = {
+    Idx: number;
+}
+
+export type UpdateSavedMessageRequest = {
+    Idx: number;
+    Message: string;
+}
+
+export type UpdateSavedMessageResponse = {
+    Success: boolean;
+}
 
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
@@ -37,6 +53,11 @@ export default interface RpcInterface {
     getSavedLocations(): Promise<SavedLocationsResponse>;
     getSettings(): Promise<GetSettingsResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
+    updateSavedMessage(request: UpdateSavedMessageRequest): Promise<UpdateSavedMessageResponse>;
+    addSavedMessage(request: AddSavedMessageRequest): Promise<void>;
+    deleteSavedMessage(request: DeleteSavedMessageRequest): Promise<void>;
+
+    // Generic call method for any RPC function, with optional parameters
     call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
 }
 
@@ -46,6 +67,15 @@ export abstract class BaseRPC implements RpcInterface {
 
     getSavedMessages(): Promise<SavedMessagesResponse> {
         return this.call('GetSavedMessages');
+    }
+    updateSavedMessage(request: UpdateSavedMessageRequest): Promise<UpdateSavedMessageResponse> {
+        return this.call('UpdateSavedMessage', request);
+    }
+    addSavedMessage(request: AddSavedMessageRequest): Promise<void> {
+        return this.call('AddSavedMessage', request);
+    }
+    deleteSavedMessage(request: DeleteSavedMessageRequest): Promise<void> {
+        return this.call('DeleteSavedMessage', request);
     }
     getSavedLocations(): Promise<SavedLocationsResponse> {
         return this.call('GetSavedLocations');

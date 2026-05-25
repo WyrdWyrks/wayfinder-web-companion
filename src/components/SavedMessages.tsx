@@ -10,6 +10,8 @@ import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Add from "@mui/icons-material/Add";
+import Delete from "@mui/icons-material/Delete";
 
 export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
     const [messages, setMessages] = useState<string[]>([]);
@@ -20,6 +22,30 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
         });
     }, [rpc]);
 
+    const [newMessage, setNewMessage] = useState("");
+
+    const handleSave = (idx: number, newMsg: string) => {
+        rpc.updateSavedMessage({ Idx: idx, Message: newMsg }).then(response => {
+            if (response.Success) {
+                setMessages(prev => prev.map((m, i) => i === idx ? newMsg : m));
+            }
+        });
+    };
+
+    const handleDelete = (idx: number) => {
+        rpc.deleteSavedMessage({ Idx: idx }).then(() => {
+            setMessages(prev => prev.filter((_, i) => i !== idx));
+        });
+    };
+
+    const handleAdd = () => {
+        if (!newMessage.trim()) return;
+        rpc.addSavedMessage({ Message: newMessage }).then(() => {
+            setMessages(prev => [...prev, newMessage]);
+            setNewMessage("");
+        });
+    };
+
     return (
         <>
             <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
@@ -27,32 +53,58 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
             </Typography>
             <Paper elevation={1}>
                 <List>
-                    {messages.map((msg, index) => <MessageItem idx={index} message={msg} key={index} />)}
+                    {messages.map((msg, index) => (
+                        <MessageItem idx={index} message={msg} key={index} onSave={handleSave} onDelete={handleDelete} />
+                    ))}
+                    <ListItem>
+                        <Stack direction="row" spacing={1} sx={{ width: "100%" }}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                placeholder="New message..."
+                                value={newMessage}
+                                onChange={e => setNewMessage(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+                            />
+                            <Button variant="outlined" startIcon={<Add />} onClick={handleAdd}>Add</Button>
+                        </Stack>
+                    </ListItem>
                 </List>
             </Paper>
         </>
     );
 }
 
-function MessageItem({ idx, message }: { idx: number; message: string }) {
+function MessageItem({ idx, message, onSave, onDelete }: { idx: number; message: string; onSave: (idx: number, message: string) => void; onDelete: (idx: number) => void }) {
     const [editMode, setEditMode] = useState(false);
+    const [draft, setDraft] = useState(message);
+
+    useEffect(() => {
+        setDraft(message);
+    }, [message]);
+
+    const handleSave = () => {
+        onSave(idx, draft);
+        setEditMode(false);
+    };
 
     return (
         <ListItem
             key={idx}
             secondaryAction={
-                editMode ? 
+                editMode ?
                     null :
-                    <IconButton edge="end" aria-label="edit" onClick={() => setEditMode(!editMode)}>
-                        <Edit />
-                    </IconButton>
+                    <Stack direction="row">
+                        <IconButton aria-label="edit" onClick={() => setEditMode(true)}><Edit /></IconButton>
+                        <IconButton edge="end" aria-label="delete" onClick={() => onDelete(idx)} color="error"><Delete /></IconButton>
+                    </Stack>
             }>
             <ListItemText
                 primary={editMode ?
                     <Stack direction="row" spacing={1}>
-                        <TextField fullWidth size="small" value={message} />
-                        <Button variant="outlined">Save</Button>
-                        <Button variant="outlined" color="error" onClick={() => setEditMode(false)}>Cancel</Button>
+                        <TextField fullWidth size="small" value={draft} onChange={e => setDraft(e.target.value)} />
+                        <Button variant="outlined" onClick={handleSave}>Save</Button>
+                        <Button variant="outlined" color="error" onClick={() => { setDraft(message); setEditMode(false); }}>Cancel</Button>
                     </Stack> :
                     message} />
         </ListItem>
