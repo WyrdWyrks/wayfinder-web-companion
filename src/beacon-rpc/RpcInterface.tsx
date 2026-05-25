@@ -56,10 +56,22 @@ export type UpdateSettingResponse = {
     Success: boolean;
 }
 
+export type UpdateSavedLocationRequest = {
+    Idx: number;
+    Name: string;
+    Lat: number;
+    Lng: number;
+}
+
+export type UpdateSavedLocationResponse = {
+    Success: boolean;
+}
+
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
 
     getSavedLocations(): Promise<SavedLocationsResponse>;
+    updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
 
     getSavedMessages(): Promise<SavedMessagesResponse>;
@@ -92,6 +104,9 @@ export abstract class BaseRPC implements RpcInterface {
     }
     getSavedLocations(): Promise<SavedLocationsResponse> {
         return this.call('GetSavedLocations');
+    }
+    updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse> {
+        return this.call('UpdateSavedLocation', request);
     }
     getSettings(): Promise<GetSettingsResponse> {
         return this.call('GetSettings');
