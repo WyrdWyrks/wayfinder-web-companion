@@ -8,6 +8,15 @@ const theme = createTheme({
   palette: {
     mode: 'dark',
   },
+  components: {
+    MuiCircularProgress: {
+      styleOverrides: {
+        root: {
+          transition: 'none',
+        }
+      }
+    }
+  }
 });
 
 createRoot(document.getElementById('root')!).render(
