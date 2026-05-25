@@ -47,15 +47,28 @@ export type UpdateSavedMessageResponse = {
     Success: boolean;
 }
 
+export type UpdateSettingRequest = {
+    SettingKey: string;
+    SettingValue: string | number | boolean;
+}
+
+export type UpdateSettingResponse = {
+    Success: boolean;
+}
+
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
-    getSavedMessages(): Promise<SavedMessagesResponse>;
+
     getSavedLocations(): Promise<SavedLocationsResponse>;
-    getSettings(): Promise<GetSettingsResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
+
+    getSavedMessages(): Promise<SavedMessagesResponse>;
     updateSavedMessage(request: UpdateSavedMessageRequest): Promise<UpdateSavedMessageResponse>;
     addSavedMessage(request: AddSavedMessageRequest): Promise<void>;
     deleteSavedMessage(request: DeleteSavedMessageRequest): Promise<void>;
+
+    getSettings(): Promise<GetSettingsResponse>;
+    updateSetting(request: UpdateSettingRequest): Promise<UpdateSettingResponse>;
 
     // Generic call method for any RPC function, with optional parameters
     call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
@@ -82,6 +95,9 @@ export abstract class BaseRPC implements RpcInterface {
     }
     getSettings(): Promise<GetSettingsResponse> {
         return this.call('GetSettings');
+    }
+    updateSetting(request: UpdateSettingRequest): Promise<UpdateSettingResponse> {
+        return this.call('UpdateSetting', request);
     }
     getDisplayContents(): Promise<DisplayContentsResponse> {
         return this.call('GetDisplayContents');

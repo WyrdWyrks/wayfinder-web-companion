@@ -50,22 +50,21 @@ export type ObjectConfigValue = {
 };
 
 export type ConfigurableBooleanConfigValue = {
-    cfgType: typeof ConfigTypes.CONFIGURABLE_BOOLEAN,
+    cfgType: 'bool',
     cfgVal: boolean,
 };
 
 export type ConfigurableIntegerConfigValue = {
-    cfgType: typeof ConfigTypes.CONFIGURABLE_INTEGER,
+    cfgType: 'int',
     cfgVal: number,
 
     minVal: number,
     maxVal: number,
     incVal: number,
-    signed: boolean,
 };
 
 export type ConfigurableFloatConfigValue = {
-    cfgType: typeof ConfigTypes.CONFIGURABLE_FLOAT,
+    cfgType: 'float',
     cfgVal: number,
 
     minVal: number,
@@ -74,14 +73,14 @@ export type ConfigurableFloatConfigValue = {
 };
 
 export type ConfigurableStringConfigValue = {
-    cfgType: typeof ConfigTypes.CONFIGURABLE_STRING,
+    cfgType: 'string',
     cfgVal: string,
 
     maxLen: number,
 };
 
 export type ConfigurableEnumConfigValue = {
-    cfgType: typeof ConfigTypes.CONFIGURABLE_ENUM,
+    cfgType: 'enum',
     cfgVal: number,
 
     vals: number[],

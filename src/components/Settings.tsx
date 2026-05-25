@@ -29,7 +29,6 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import MemoryIcon from "@mui/icons-material/Memory";
 import DeveloperBoardIcon from "@mui/icons-material/DeveloperBoard";
 import WifiIcon from "@mui/icons-material/Wifi";
-import { ConfigTypes } from "../beacon-rpc/ConfigValue";
 import type { ConfigurableEnumConfigValue, ConfigurableIntegerConfigValue, ConfigurableFloatConfigValue } from "../beacon-rpc/ConfigValue";
 import NumberSpinner from "./ext/NumberSpinner";
 
@@ -56,7 +55,20 @@ export function Settings({ rpc }: { rpc: RpcInterface }) {
             <Stack direction="column" spacing={1}>
                 {
                     [...Object.entries(settings)].map(([key, value]) =>
-                        <SettingItem key={key} name={key} setting={value} />
+                        <SettingItem
+                            key={key}
+                            name={key}
+                            setting={value}
+                            rpc={rpc}
+                            onSaved={(newVal) => setSettings(prev => {
+                                if (!prev) return prev;
+                                const s = prev[key];
+                                if (typeof s === 'object' && s !== null) {
+                                    return { ...prev, [key]: { ...s, cfgVal: newVal } } as GetSettingsResponse;
+                                }
+                                return prev;
+                            })}
+                        />
                     )
                 }
             </Stack>
@@ -64,18 +76,26 @@ export function Settings({ rpc }: { rpc: RpcInterface }) {
     );
 }
 
-export function SettingItem({ name, setting }: { name: string, setting: Setting }): JSX.Element {
+export function SettingItem({ name, setting, rpc, onSaved }: {
+    name: string;
+    setting: Setting;
+    rpc: RpcInterface;
+    onSaved: (newValue: string | number | boolean) => void;
+}): JSX.Element {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState<string | number | boolean>('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const isPrimitive = typeof setting === 'string' || typeof setting === 'number' || typeof setting === 'boolean';
-    const isConfigurable = !isPrimitive && setting.cfgType >= ConfigTypes.CONFIGURABLE_BOOLEAN;
-    
+    const configurableTypes = new Set(['bool', 'int', 'float', 'string', 'enum']);
+    const isConfigurable = !isPrimitive && configurableTypes.has(setting.cfgType as string);
+
     const displayValue = (() => {
         if (isPrimitive) return String(setting);
-        
+
         // For enums, show the friendly label
-        if (setting.cfgType === ConfigTypes.CONFIGURABLE_ENUM) {
+        if (setting.cfgType === 'enum') {
             const enumSetting = setting as ConfigurableEnumConfigValue;
             const valueIndex = enumSetting.vals.indexOf(enumSetting.cfgVal as number);
             return enumSetting.valTxt[valueIndex];
@@ -94,18 +114,34 @@ export function SettingItem({ name, setting }: { name: string, setting: Setting 
         setIsEditing(true);
     };
 
-    const handleSave = () => {
-        console.log('Saving', name, editValue); // TODO: Call RPC
-        setIsEditing(false);
+    const handleSave = async () => {
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            const result = await rpc.updateSetting({ SettingKey: name, SettingValue: editValue });
+            if (result.Success) {
+                onSaved(editValue);
+                setIsEditing(false);
+            } else {
+                setSaveError('Device rejected the update');
+            }
+        } catch (e) {
+            setSaveError(e instanceof Error ? e.message : 'Failed to save');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleCancel = () => setIsEditing(false);
+    const handleCancel = () => {
+        setSaveError(null);
+        setIsEditing(false);
+    };
 
     const renderEditor = () => {
         if (isPrimitive) return null;
 
         switch (setting.cfgType) {
-            case ConfigTypes.CONFIGURABLE_BOOLEAN:
+            case 'bool':
                 return (
                     <FormControlLabel
                         control={<Switch checked={Boolean(editValue)} onChange={(e) => setEditValue(e.target.checked)} color="primary" />}
@@ -113,8 +149,8 @@ export function SettingItem({ name, setting }: { name: string, setting: Setting 
                     />
                 );
 
-            case ConfigTypes.CONFIGURABLE_INTEGER:
-            case ConfigTypes.CONFIGURABLE_FLOAT:
+            case 'int':
+            case 'float':
                 const numSetting = setting as ConfigurableIntegerConfigValue | ConfigurableFloatConfigValue;
                 return (
                     <NumberSpinner
@@ -127,10 +163,10 @@ export function SettingItem({ name, setting }: { name: string, setting: Setting 
                     />
                 );
 
-            case ConfigTypes.CONFIGURABLE_STRING:
+            case 'string':
                 return <TextField value={editValue} onChange={(e) => setEditValue(e.target.value)} size="small" fullWidth />;
 
-            case ConfigTypes.CONFIGURABLE_ENUM:
+            case 'enum':
                 const enumSetting = setting as ConfigurableEnumConfigValue;
                 return (
                     <FormControl fullWidth size="small">
@@ -168,7 +204,14 @@ export function SettingItem({ name, setting }: { name: string, setting: Setting 
                             {name}
                         </Typography>
                         {isEditing ? (
-                            <Box sx={{ marginTop: '0.5em' }}>{renderEditor()}</Box>
+                            <Box sx={{ marginTop: '0.5em' }}>
+                                {renderEditor()}
+                                {saveError && (
+                                    <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                                        {saveError}
+                                    </Typography>
+                                )}
+                            </Box>
                         ) : (
                             <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>
                                 {displayValue}
@@ -179,10 +222,10 @@ export function SettingItem({ name, setting }: { name: string, setting: Setting 
                         <Stack direction="row" spacing={1} alignItems="center">
                             {isEditing ? (
                                 <>
-                                    <IconButton size="small" color="success" onClick={handleSave} sx={iconButtonSx}>
-                                        <CheckIcon fontSize="small" />
+                                    <IconButton size="small" color="success" onClick={handleSave} disabled={isSaving} sx={iconButtonSx}>
+                                        {isSaving ? <CircularProgress size={16} /> : <CheckIcon fontSize="small" />}
                                     </IconButton>
-                                    <IconButton size="small" color="error" onClick={handleCancel} sx={iconButtonSx}>
+                                    <IconButton size="small" color="error" onClick={handleCancel} disabled={isSaving} sx={iconButtonSx}>
                                         <CloseIcon fontSize="small" />
                                     </IconButton>
                                 </>
