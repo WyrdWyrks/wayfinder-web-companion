@@ -70,19 +70,11 @@ function DeviceInfoToolbar({ deviceInfo }: { deviceInfo: DeviceInformation }) {
         >
           {/* Device Icon */}
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            {deviceInfo.HardwareVersion === 1 && (
+            {[1, 2, 3].includes(deviceInfo.HardwareVersion) && (
               <img
-                width={60}
-                src='./v1-icon.png'
-                alt="Hardware Version 1"
-                style={{ display: 'block' }}
-              />
-            )}
-            {deviceInfo.HardwareVersion === 2 && (
-              <img
-                width={60}
-                src='./v2-icon.png'
-                alt="Hardware Version 2"
+                width={90}
+                src={`./svg/wayfinder-v${deviceInfo.HardwareVersion}.svg`}
+                alt={`Hardware Version ${deviceInfo.HardwareVersion}`}
                 style={{ display: 'block' }}
               />
             )}

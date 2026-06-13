@@ -18,6 +18,29 @@ function AppContent() {
     [beacon.rpc, showError]
   );
 
+  // Swap the browser tab favicon to match the connected hardware, restoring
+  // the default (PWA-generated) icon when the device disconnects.
+  const hardwareVersion = beacon.connected ? beacon.initialDeviceInformation?.HardwareVersion : undefined;
+  React.useEffect(() => {
+    const icons = document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]');
+    if (icons.length === 0) return;
+    const originals = Array.from(icons).map((link) => ({ link, href: link.href, type: link.type }));
+
+    if (hardwareVersion && [1, 2, 3].includes(hardwareVersion)) {
+      icons.forEach((link) => {
+        link.href = `/svg/wayfinder-v${hardwareVersion}.svg`;
+        link.type = 'image/svg+xml';
+      });
+    }
+
+    return () => {
+      originals.forEach(({ link, href, type }) => {
+        link.href = href;
+        link.type = type;
+      });
+    };
+  }, [hardwareVersion]);
+
   return (
     <>
       <CssBaseline />
