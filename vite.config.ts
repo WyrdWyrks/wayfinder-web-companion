@@ -19,7 +19,7 @@ export default defineConfig({
     manifest: {
       name: 'degen-beacon-web',
       short_name: 'degen-beacon-web',
-      description: 'Degen Beacon WebApp',
+      description: 'Wayfinder Web Companion',
       theme_color: '#fc6203',
     },
 

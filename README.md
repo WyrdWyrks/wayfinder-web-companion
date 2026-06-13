@@ -1,4 +1,4 @@
-# Degen Beacon Webapp
+# Wayfinder Web Companion
 
 PWA for the degen beacon
 
