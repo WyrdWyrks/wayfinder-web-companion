@@ -79,38 +79,21 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
         const { width, height, buffer } = display;
         const bin = atob(buffer);
         const imageData = ctx.createImageData(width, height);
-        if (deviceInfo && deviceInfo.HardwareVersion === 3) {
-            // GFXcanvas1: row-major, each byte is 8 horizontal pixels, LSB is leftmost
-            const bytesPerRow = Math.ceil(width / 8);
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const byteIndex = y * bytesPerRow + (x >> 3);
-                    const bit = 7 - (x & 7);
-                    const byte = bin.charCodeAt(byteIndex);
-                    const pixelOn = (byte >> bit) & 1;
-                    const color = pixelOn ? 255 : 0;
-                    const idx = (y * width + x) * 4;
-                    imageData.data[idx + 0] = color;
-                    imageData.data[idx + 1] = color;
-                    imageData.data[idx + 2] = color;
-                    imageData.data[idx + 3] = 255;
-                }
-            }
-        } else {
-            // SSD1306: each byte is a vertical column of 8 pixels
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const byteIndex = x + Math.floor(y / 8) * width;
-                    const bit = y % 8;
-                    const byte = bin.charCodeAt(byteIndex);
-                    const pixelOn = (byte >> bit) & 1;
-                    const color = pixelOn ? 255 : 0;
-                    const idx = (y * width + x) * 4;
-                    imageData.data[idx + 0] = color;
-                    imageData.data[idx + 1] = color;
-                    imageData.data[idx + 2] = color;
-                    imageData.data[idx + 3] = 255;
-                }
+        // Both the SSD1306 and the Adafruit SH1107 (1bpp, via Adafruit_GrayOLED)
+        // use a page-based buffer: each byte is a vertical column of 8 pixels,
+        // laid out as buffer[x + (y / 8) * width] with the LSB at the top.
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const byteIndex = x + Math.floor(y / 8) * width;
+                const bit = y % 8;
+                const byte = bin.charCodeAt(byteIndex);
+                const pixelOn = (byte >> bit) & 1;
+                const color = pixelOn ? 255 : 0;
+                const idx = (y * width + x) * 4;
+                imageData.data[idx + 0] = color;
+                imageData.data[idx + 1] = color;
+                imageData.data[idx + 2] = color;
+                imageData.data[idx + 3] = 255;
             }
         }
         ctx.putImageData(imageData, 0, 0);
