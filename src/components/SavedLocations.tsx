@@ -6,15 +6,18 @@ import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Stack from "@mui/material/Stack";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Chip from "@mui/material/Chip";
 import TextField from "@mui/material/TextField";
+import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import AddLocationIcon from "@mui/icons-material/AddLocation";
 
 export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
     const [locations, setLocations] = React.useState<SavedLocation[]>([]);
@@ -31,7 +34,12 @@ export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
                 Saved Locations
             </Typography>
 
-            <Stack direction="column" spacing={2}>
+            <NewLocationForm
+                rpc={rpc}
+                onAdded={(added) => setLocations(prev => [...prev, added])}
+            />
+
+            <Stack direction="column" spacing={2} sx={{ mt: 2 }}>
                 {locations.map((loc, index) => (
                     <LocationCard
                         idx={index}
@@ -43,6 +51,92 @@ export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
                 ))}
             </Stack>
         </>
+    );
+}
+
+function NewLocationForm({ rpc, onAdded }: {
+    rpc: RpcInterface;
+    onAdded: (added: SavedLocation) => void;
+}) {
+    const [name, setName] = useState('');
+    const [lat, setLat] = useState('');
+    const [lng, setLng] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const canAdd = name.trim().length > 0 && lat.trim().length > 0 && lng.trim().length > 0;
+
+    const handleAdd = async () => {
+        const parsedLat = Number(lat);
+        const parsedLng = Number(lng);
+        if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) {
+            setError('Lat/Lng must be numbers');
+            return;
+        }
+
+        setIsSaving(true);
+        setError(null);
+        try {
+            await rpc.addSavedLocation({ Name: name, Lat: parsedLat, Lng: parsedLng });
+            onAdded({ Name: name, Lat: parsedLat, Lng: parsedLng });
+            setName('');
+            setLat('');
+            setLng('');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Failed to add location');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Card elevation={2}>
+            <CardContent>
+                <Stack spacing={2}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <AddLocationIcon color="primary" />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            New Location
+                        </Typography>
+                    </Stack>
+
+                    {error && <Alert severity="error">{error}</Alert>}
+
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                        <TextField
+                            label="Name"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            size="small"
+                            fullWidth
+                        />
+                        <TextField
+                            label="Lat"
+                            value={lat}
+                            onChange={(e) => setLat(e.target.value)}
+                            size="small"
+                            fullWidth
+                        />
+                        <TextField
+                            label="Lng"
+                            value={lng}
+                            onChange={(e) => setLng(e.target.value)}
+                            size="small"
+                            fullWidth
+                        />
+                    </Stack>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleAdd}
+                        disabled={!canAdd || isSaving}
+                        startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <AddLocationIcon />}
+                    >
+                        Add Location
+                    </Button>
+                </Stack>
+            </CardContent>
+        </Card>
     );
 }
 

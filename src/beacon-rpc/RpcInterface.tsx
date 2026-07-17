@@ -67,11 +67,54 @@ export type UpdateSavedLocationResponse = {
     Success: boolean;
 }
 
+export type AddSavedLocationRequest = {
+    Name: string;
+    Lat: number;
+    Lng: number;
+}
+
+export type ClearWifiGeoDbRequest = {
+    path?: string;
+}
+
+export type ClearWifiGeoDbResponse = {
+    status?: string;
+    error?: string;
+}
+
+export type InsertWifiGeoDbBlockRequest = {
+    chunk: string; // base64-encoded raw DB bytes
+    checksum: number; // sum of the raw (pre-base64) bytes, uint32 wraparound
+    offset?: number; // expected file size before this write; guards against a lost/reordered block
+    path?: string;
+}
+
+export type InsertWifiGeoDbBlockResponse = {
+    written?: number;
+    total_size?: number;
+    error?: string;
+    expected_offset?: number;
+}
+
+export type GetWifiGeoDbInfoRequest = {
+    path?: string;
+}
+
+export type GetWifiGeoDbInfoResponse = {
+    open: boolean;
+    count: number;
+    bucket_bits: number;
+}
+
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
 
     getSavedLocations(): Promise<SavedLocationsResponse>;
+    addSavedLocation(request: AddSavedLocationRequest): Promise<void>;
     updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse>;
+    clearWifiGeoDb(request?: ClearWifiGeoDbRequest): Promise<ClearWifiGeoDbResponse>;
+    insertWifiGeoDbBlock(request: InsertWifiGeoDbBlockRequest): Promise<InsertWifiGeoDbBlockResponse>;
+    getWifiGeoDbInfo(request?: GetWifiGeoDbInfoRequest): Promise<GetWifiGeoDbInfoResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
 
     getSavedMessages(): Promise<SavedMessagesResponse>;
@@ -105,8 +148,20 @@ export abstract class BaseRPC implements RpcInterface {
     getSavedLocations(): Promise<SavedLocationsResponse> {
         return this.call('GetSavedLocations');
     }
+    addSavedLocation(request: AddSavedLocationRequest): Promise<void> {
+        return this.call('AddSavedLocation', request);
+    }
     updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse> {
         return this.call('UpdateSavedLocation', request);
+    }
+    clearWifiGeoDb(request: ClearWifiGeoDbRequest = {}): Promise<ClearWifiGeoDbResponse> {
+        return this.call('ClearWifiGeoDb', request);
+    }
+    insertWifiGeoDbBlock(request: InsertWifiGeoDbBlockRequest): Promise<InsertWifiGeoDbBlockResponse> {
+        return this.call('InsertWifiGeoDbBlock', request);
+    }
+    getWifiGeoDbInfo(request: GetWifiGeoDbInfoRequest = {}): Promise<GetWifiGeoDbInfoResponse> {
+        return this.call('GetWifiGeoDbInfo', request);
     }
     getSettings(): Promise<GetSettingsResponse> {
         return this.call('GetSettings');

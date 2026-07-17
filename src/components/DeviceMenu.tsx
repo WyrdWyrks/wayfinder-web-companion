@@ -14,10 +14,12 @@ import Message from "@mui/icons-material/Message";
 import PinDrop from "@mui/icons-material/PinDrop";
 import SystemUpdateAlt from "@mui/icons-material/SystemUpdateAlt";
 import ScreenShare from "@mui/icons-material/ScreenShare";
+import UploadFile from "@mui/icons-material/UploadFile";
 import type RpcInterface from "../beacon-rpc/RpcInterface";
 import { ScreenTab } from "./ScreenTab";
 import { SavedMessages } from "./SavedMessages";
 import { SavedLocations } from "./SavedLocations";
+import { LocationImport } from "./LocationImport";
 import { Settings as SettingsComponent } from "./Settings";
 import { Firmware } from "./Firmware";
 
@@ -31,6 +33,7 @@ export function DeviceMenu({ rpc, deviceInfo }: { rpc: RpcInterface, deviceInfo:
   const tabs = [
     { icon: <Message />, label: "Messages", component: <SavedMessages rpc={rpc} /> },
     { icon: <PinDrop />, label: "Locations", component: <SavedLocations rpc={rpc} /> },
+    { icon: <UploadFile />, label: "Geolocation", component: <LocationImport rpc={rpc} /> },
     { icon: <Settings />, label: "Settings", component: <SettingsComponent rpc={rpc} /> },
     { icon: <SystemUpdateAlt />, label: "Firmware", component: <Firmware deviceInfo={deviceInfo} rpc={rpc} /> },
   { icon: <ScreenShare />, label: "Screen", component: <ScreenTab rpc={rpc} deviceInfo={deviceInfo} /> },
@@ -96,7 +99,7 @@ function DeviceInfoToolbar({ deviceInfo }: { deviceInfo: DeviceInformation }) {
               Device ID
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-              {deviceInfo.DeviceID}
+              0x{deviceInfo.DeviceID.toString(16).toUpperCase()}
             </Typography>
           </Box>
 
