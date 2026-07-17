@@ -10,13 +10,15 @@ import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Alert from "@mui/material/Alert";
 import Add from "@mui/icons-material/Add";
 import Delete from "@mui/icons-material/Delete";
 
-export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
+export function SavedMessages({ rpc }: { rpc?: RpcInterface }) {
     const [messages, setMessages] = useState<string[]>([]);
 
     useEffect(() => {
+        if (!rpc) return;
         rpc.getSavedMessages().then(response => {
             setMessages(response.Messages);
         });
@@ -25,6 +27,7 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
     const [newMessage, setNewMessage] = useState("");
 
     const handleSave = (idx: number, newMsg: string) => {
+        if (!rpc) return;
         rpc.updateSavedMessage({ Idx: idx, Message: newMsg }).then(response => {
             if (response.Success) {
                 setMessages(prev => prev.map((m, i) => i === idx ? newMsg : m));
@@ -33,13 +36,14 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
     };
 
     const handleDelete = (idx: number) => {
+        if (!rpc) return;
         rpc.deleteSavedMessage({ Idx: idx }).then(() => {
             setMessages(prev => prev.filter((_, i) => i !== idx));
         });
     };
 
     const handleAdd = () => {
-        if (!newMessage.trim()) return;
+        if (!rpc || !newMessage.trim()) return;
         rpc.addSavedMessage({ Message: newMessage }).then(() => {
             setMessages(prev => [...prev, newMessage]);
             setNewMessage("");
@@ -51,6 +55,11 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
             <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
                 Saved Messages
             </Typography>
+            {!rpc && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    Connect a device to view and edit saved messages.
+                </Alert>
+            )}
             <Paper elevation={1}>
                 <List>
                     {messages.map((msg, index) => (
@@ -65,8 +74,9 @@ export function SavedMessages({ rpc }: { rpc: RpcInterface }) {
                                 value={newMessage}
                                 onChange={e => setNewMessage(e.target.value)}
                                 onKeyDown={e => { if (e.key === "Enter") handleAdd(); }}
+                                disabled={!rpc}
                             />
-                            <Button variant="outlined" startIcon={<Add />} onClick={handleAdd}>Add</Button>
+                            <Button variant="outlined" startIcon={<Add />} onClick={handleAdd} disabled={!rpc}>Add</Button>
                         </Stack>
                     </ListItem>
                 </List>

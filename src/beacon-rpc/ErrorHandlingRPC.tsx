@@ -21,6 +21,15 @@ export class ErrorHandlingRPC extends BaseRPC {
         }
     }
 
+    async disconnect(): Promise<void> {
+        try {
+            await this.inner.disconnect();
+        } catch (e) {
+            this.onError(e instanceof Error ? e.message : String(e));
+            throw e;
+        }
+    }
+
     async call<T>(functionName: string, params?: Record<string, unknown>): Promise<T> {
         try {
             return await this.inner.call<T>(functionName, params);

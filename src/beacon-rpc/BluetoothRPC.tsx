@@ -70,6 +70,10 @@ class BluetoothRPC extends BaseRPC {
         return this.call('GetSystemInfo');
     }
 
+    async disconnect(): Promise<void> {
+        this.device.gatt?.disconnect();
+    }
+
     async call<T>(functionName: string, params: Record<string, unknown> = {}): Promise<T> {
         const body = { 'F': functionName, ...params };
         const data = encode(body);

@@ -14,6 +14,9 @@ class SerialRPC extends BaseRPC {
     serial: SerialPort;
     writer: WritableStreamDefaultWriter<Uint8Array<ArrayBufferLike>>;
     reader: ReadableStreamDefaultReader<string>;
+    // Resolves once serial.readable has fully unpiped — awaited before
+    // serial.close() so the port doesn't stay locked for the next connect.
+    private readablePiped: Promise<void>;
 
     constructor(serial: SerialPort) {
         super();
@@ -23,7 +26,9 @@ class SerialRPC extends BaseRPC {
             throw new Error("Serial port not readable");
         }
         const textDecoder = new TextDecoderStream();
-        this.serial.readable.pipeTo(textDecoder.writable as WritableStream<Uint8Array<ArrayBuffer>>);
+        this.readablePiped = this.serial.readable
+            .pipeTo(textDecoder.writable as WritableStream<Uint8Array<ArrayBuffer>>)
+            .catch(() => { /* expected once reader.cancel() is called on disconnect */ });
         this.reader = textDecoder.readable
             .pipeThrough(new TransformStream(new LineBreakTransformer()))
             .getReader();
@@ -36,6 +41,25 @@ class SerialRPC extends BaseRPC {
 
     async getDeviceInformation(): Promise<DeviceInformation> {
         return this.call('GetSystemInfo');
+    }
+
+    async disconnect(): Promise<void> {
+        try {
+            await this.reader.cancel();
+        } catch {
+            // ignore — cancellation racing with an in-flight read is fine
+        }
+        this.reader.releaseLock();
+        await this.readablePiped;
+
+        try {
+            await this.writer.close();
+        } catch {
+            // ignore
+        }
+        this.writer.releaseLock();
+
+        await this.serial.close();
     }
 
     async call<T>(functionName: string, params: Record<string, unknown> = {}): Promise<T> {

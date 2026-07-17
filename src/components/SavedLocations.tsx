@@ -19,10 +19,11 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import AddLocationIcon from "@mui/icons-material/AddLocation";
 
-export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
+export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
     const [locations, setLocations] = React.useState<SavedLocation[]>([]);
 
     useEffect(() => {
+        if (!rpc) return;
         rpc.getSavedLocations().then(response => {
             setLocations(response.Locations);
         });
@@ -34,10 +35,14 @@ export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
                 Saved Locations
             </Typography>
 
-            <NewLocationForm
-                rpc={rpc}
-                onAdded={(added) => setLocations(prev => [...prev, added])}
-            />
+            {rpc ? (
+                <NewLocationForm
+                    rpc={rpc}
+                    onAdded={(added) => setLocations(prev => [...prev, added])}
+                />
+            ) : (
+                <Alert severity="info">Connect a device to add and edit saved locations.</Alert>
+            )}
 
             <Stack direction="column" spacing={2} sx={{ mt: 2 }}>
                 {locations.map((loc, index) => (
@@ -45,7 +50,7 @@ export function SavedLocations({ rpc }: { rpc: RpcInterface }) {
                         idx={index}
                         location={loc}
                         key={index}
-                        rpc={rpc}
+                        rpc={rpc!}
                         onSaved={(updated) => setLocations(prev => prev.map((l, i) => i === index ? updated : l))}
                     />
                 ))}

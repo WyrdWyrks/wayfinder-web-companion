@@ -3,13 +3,14 @@ import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Tooltip from "@mui/material/Tooltip";
+import Alert from "@mui/material/Alert";
 import type { DisplayContentsResponse } from "../beacon-rpc/RpcInterface";
 import CircularProgress from "@mui/material/CircularProgress";
 import LinearProgress from "@mui/material/LinearProgress";
 
 const REFRESH_INTERVAL_MS = 750;
 
-export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
+export function ScreenTab({ rpc, deviceInfo }: { rpc?: any, deviceInfo?: any }) {
     const [display, setDisplay] = useState<DisplayContentsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [autoRefresh, setAutoRefresh] = useState(false);
@@ -17,6 +18,7 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const fetchDisplay = () => {
+        if (!rpc) return;
         setLoading(true);
         rpc.getDisplayContents().then((res: DisplayContentsResponse) => {
             setDisplay(res);
@@ -25,7 +27,7 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
     };
 
     useEffect(() => {
-        if (!autoRefresh) {
+        if (!autoRefresh || !rpc) {
             setCountdown(0);
             return;
         }
@@ -61,6 +63,10 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
     }, [autoRefresh, rpc]);
 
     useEffect(() => {
+        if (!rpc) {
+            setLoading(false);
+            return;
+        }
         let mounted = true;
         setLoading(true);
         rpc.getDisplayContents().then((res: DisplayContentsResponse) => {
@@ -99,6 +105,7 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc: any, deviceInfo: any }) {
         ctx.putImageData(imageData, 0, 0);
     }, [display, deviceInfo]);
 
+    if (!rpc) return <Alert severity="info">Connect a device to view its screen.</Alert>;
     if (loading && !display) return <CircularProgress />;
     if (!display) return <div>No display data</div>;
     return (

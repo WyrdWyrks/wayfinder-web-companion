@@ -3,6 +3,7 @@ import type RpcInterface from "../beacon-rpc/RpcInterface";
 import type { GetSettingsResponse, Setting } from "../beacon-rpc/RpcInterface";
 import CircularProgress from "@mui/material/CircularProgress";
 import Typography from "@mui/material/Typography";
+import Alert from "@mui/material/Alert";
 import Stack from "@mui/material/Stack";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -32,15 +33,27 @@ import WifiIcon from "@mui/icons-material/Wifi";
 import type { ConfigurableEnumConfigValue, ConfigurableIntegerConfigValue, ConfigurableFloatConfigValue } from "../beacon-rpc/ConfigValue";
 import NumberSpinner from "./ext/NumberSpinner";
 
-export function Settings({ rpc }: { rpc: RpcInterface }) {
+export function Settings({ rpc }: { rpc?: RpcInterface }) {
     const [settings, setSettings] = React.useState<GetSettingsResponse | null>(null);
 
     useEffect(() => {
+        if (!rpc) return;
         rpc.getSettings().then(response => {
             console.log("Fetched settings:", response);
             setSettings(response);
         });
     }, [rpc]);
+
+    if (!rpc) {
+        return (
+            <>
+                <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
+                    Settings
+                </Typography>
+                <Alert severity="info">Connect a device to view and edit settings.</Alert>
+            </>
+        );
+    }
 
     if (settings === null) {
         return <CircularProgress />;

@@ -109,6 +109,12 @@ export type GetWifiGeoDbInfoResponse = {
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
 
+    // Releases any exclusive transport resource (serial port, BLE GATT
+    // connection) so a later connection attempt doesn't fail because the
+    // previous one is still holding it open. No-op for transports that
+    // don't hold one (e.g. HTTP).
+    disconnect(): Promise<void>;
+
     getSavedLocations(): Promise<SavedLocationsResponse>;
     addSavedLocation(request: AddSavedLocationRequest): Promise<void>;
     updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse>;
@@ -132,6 +138,10 @@ export default interface RpcInterface {
 export abstract class BaseRPC implements RpcInterface {
     abstract getDeviceInformation(): Promise<DeviceInformation>;
     abstract call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
+
+    async disconnect(): Promise<void> {
+        // No exclusive resource to release by default.
+    }
 
     getSavedMessages(): Promise<SavedMessagesResponse> {
         return this.call('GetSavedMessages');

@@ -49,7 +49,7 @@ type LoadedFile = {
     parsed: BssidQueryFile | null;
 };
 
-export function LocationImport({ rpc }: { rpc: RpcInterface }) {
+export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [loaded, setLoaded] = useState<LoadedFile | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -63,6 +63,12 @@ export function LocationImport({ rpc }: { rpc: RpcInterface }) {
     const [deviceDbError, setDeviceDbError] = useState<string | null>(null);
 
     const refreshDeviceDbInfo = useCallback(async () => {
+        if (!rpc) {
+            setDeviceDbInfo(null);
+            setDeviceDbError(null);
+            setDeviceDbLoading(false);
+            return;
+        }
         setDeviceDbLoading(true);
         setDeviceDbError(null);
         try {
@@ -120,6 +126,7 @@ export function LocationImport({ rpc }: { rpc: RpcInterface }) {
     };
 
     const handleImportToDevice = async () => {
+        if (!rpc) return;
         const results = loaded?.parsed?.results;
         if (!results || results.length === 0) {
             setImportMessage({ type: "error", text: "Loaded file has no results to import." });
@@ -188,16 +195,19 @@ export function LocationImport({ rpc }: { rpc: RpcInterface }) {
                             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
                                 WiFi Geo DB On Device
                             </Typography>
-                            {deviceDbLoading && (
+                            {!rpc && (
+                                <Typography variant="body2" color="text.secondary">Connect a device to check</Typography>
+                            )}
+                            {rpc && deviceDbLoading && (
                                 <Stack direction="row" spacing={1} alignItems="center">
                                     <CircularProgress size={16} />
                                     <Typography variant="body2" color="text.secondary">Querying device...</Typography>
                                 </Stack>
                             )}
-                            {!deviceDbLoading && deviceDbError && (
+                            {rpc && !deviceDbLoading && deviceDbError && (
                                 <Typography variant="body2" color="error">{deviceDbError}</Typography>
                             )}
-                            {!deviceDbLoading && !deviceDbError && deviceDbInfo && (
+                            {rpc && !deviceDbLoading && !deviceDbError && deviceDbInfo && (
                                 deviceDbInfo.open ? (
                                     <Typography variant="body1" sx={{ fontFamily: "monospace" }}>
                                         {deviceDbInfo.count.toLocaleString()} records ({deviceDbInfo.bucket_bits}-bit buckets)
@@ -207,7 +217,7 @@ export function LocationImport({ rpc }: { rpc: RpcInterface }) {
                                 )
                             )}
                         </Box>
-                        <IconButton onClick={refreshDeviceDbInfo} disabled={deviceDbLoading} size="small">
+                        <IconButton onClick={refreshDeviceDbInfo} disabled={!rpc || deviceDbLoading} size="small">
                             <RefreshIcon fontSize="small" />
                         </IconButton>
                     </Stack>
@@ -285,12 +295,18 @@ export function LocationImport({ rpc }: { rpc: RpcInterface }) {
                             </Box>
                         )}
 
+                        {!rpc && (
+                            <Alert severity="info">
+                                Connect a device to import — you can still prepare files below.
+                            </Alert>
+                        )}
+
                         <Button
                             variant="contained"
                             color="primary"
                             startIcon={<CloudUploadIcon />}
                             onClick={handleImportToDevice}
-                            disabled={!canImport || importing}
+                            disabled={!rpc || !canImport || importing}
                             fullWidth
                         >
                             {importing ? "Importing..." : "Import to Device"}

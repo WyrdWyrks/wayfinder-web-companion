@@ -41,11 +41,32 @@ function AppContent() {
     };
   }, [hardwareVersion]);
 
+  const handleReturnToConnect = async () => {
+    // Release the serial port / BLE connection before switching screens —
+    // otherwise a later reconnect attempt fails because the previous
+    // transport still holds the port open.
+    if (rpc) {
+      try {
+        await rpc.disconnect();
+      } catch (e) {
+        console.error('Error disconnecting:', e);
+      }
+    }
+    setBeacon({ connected: false });
+  };
+
   return (
     <>
       <CssBaseline />
-      {!beacon.connected && <ConnectCard setBeacon={setBeacon} />}
-      {beacon.connected && <DeviceMenu rpc={rpc!} deviceInfo={beacon.initialDeviceInformation!} />}
+      {!beacon.connected && !beacon.offline && <ConnectCard setBeacon={setBeacon} />}
+      {(beacon.connected || beacon.offline) && (
+        <DeviceMenu
+          rpc={rpc}
+          deviceInfo={beacon.initialDeviceInformation}
+          offline={!beacon.connected}
+          onReturnToConnect={handleReturnToConnect}
+        />
+      )}
       <PWABadge />
     </>
   )

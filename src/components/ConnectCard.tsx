@@ -149,6 +149,14 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
             </Stepper>
           </Box>
 
+          <Button
+            onClick={() => setBeacon({ connected: false, offline: true })}
+            sx={{ mt: 2 }}
+            variant="outlined"
+            color="secondary"
+          >
+            Continue without connecting
+          </Button>
         </CardContent>
       </Card>
     </Box>

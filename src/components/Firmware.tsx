@@ -87,7 +87,7 @@ async function fetchCompatibleFirmware(
     return compatible;
 }
 
-export function Firmware({ rpc, deviceInfo }: { rpc: RpcInterface, deviceInfo: DeviceInformation }) {
+export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?: DeviceInformation }) {
     rpc; // TODO: use rpc here to actually upload firmware
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -102,9 +102,15 @@ export function Firmware({ rpc, deviceInfo }: { rpc: RpcInterface, deviceInfo: D
     // Bumping this re-runs the fetch effect (used by the "Retry" button).
     const [reloadCount, setReloadCount] = useState(0);
 
-    const hardwareVersion = deviceInfo.HardwareVersion;
+    const hardwareVersion = deviceInfo?.HardwareVersion;
 
     useEffect(() => {
+        if (hardwareVersion === undefined) {
+            setAvailableFirmware([]);
+            setLoadingFirmware(false);
+            return;
+        }
+
         const controller = new AbortController();
         setLoadingFirmware(true);
         setFirmwareError(null);
@@ -159,6 +165,17 @@ export function Firmware({ rpc, deviceInfo }: { rpc: RpcInterface, deviceInfo: D
             setUploading(false);
         }
     };
+
+    if (!deviceInfo) {
+        return (
+            <Box sx={{ padding: '2em', maxWidth: '800px', margin: '0 auto' }}>
+                <Typography variant="h5" sx={{ marginBottom: '1.5em', fontWeight: 600 }}>
+                    Firmware Management
+                </Typography>
+                <Alert severity="info">Connect a device to manage firmware.</Alert>
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ padding: '2em', maxWidth: '800px', margin: '0 auto' }}>
