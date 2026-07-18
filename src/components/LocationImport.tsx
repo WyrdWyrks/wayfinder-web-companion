@@ -19,6 +19,7 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import type RpcInterface from "../beacon-rpc/RpcInterface";
 import type { GetWifiGeoDbInfoResponse } from "../beacon-rpc/RpcInterface";
 import { buildWifiGeoDb, chunkWifiGeoDb, parseGeoResults } from "../wifi-geo-db/GeoDbBuilder";
+import { BssidScanMap } from "./ext/BssidScanMap";
 
 const LVCC_TEMPLATE_URL = "/data/lvcc-locations.json";
 
@@ -323,33 +324,47 @@ function LoadedFileSummary({ loaded }: { loaded: LoadedFile }) {
     const bssidCount = loaded.parsed?.count ?? loaded.parsed?.results?.length;
     const queriedAt = query?.queried_at ? new Date(query.queried_at) : null;
 
+    const points = (loaded.parsed?.results ?? [])
+        .filter((r): r is { bssid?: string; lat: number; lon: number; dist_km?: number } =>
+            typeof r.lat === 'number' && typeof r.lon === 'number');
+
+    const centerMarker = query?.center?.lat !== undefined && query?.center?.lon !== undefined
+        ? { lat: query.center.lat, lon: query.center.lon, radiusKm: query.radius_km }
+        : null;
+
     return (
-        <Alert severity="success" icon={false}>
-            <Stack spacing={1}>
-                <Typography variant="body2">
-                    Loaded <strong>{loaded.name}</strong> ({(loaded.sizeBytes / 1024).toFixed(2)} KB)
-                </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {query?.name && <Chip size="small" label={query.name} />}
-                    {bssidCount !== undefined && (
-                        <Chip size="small" label={`${bssidCount.toLocaleString()} BSSIDs`} color="primary" variant="outlined" />
-                    )}
-                    {query?.center?.lat !== undefined && query?.center?.lon !== undefined && (
-                        <Chip
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontFamily: "monospace" }}
-                            label={`Center: ${query.center.lat.toFixed(5)}, ${query.center.lon.toFixed(5)}`}
-                        />
-                    )}
-                    {query?.radius_km !== undefined && (
-                        <Chip size="small" variant="outlined" label={`Radius: ${query.radius_km} km`} />
-                    )}
-                    {queriedAt && !isNaN(queriedAt.getTime()) && (
-                        <Chip size="small" variant="outlined" label={`Queried: ${queriedAt.toLocaleString()}`} />
-                    )}
+        <Stack spacing={1.5}>
+            <Alert severity="success" icon={false}>
+                <Stack spacing={1}>
+                    <Typography variant="body2">
+                        Loaded <strong>{loaded.name}</strong> ({(loaded.sizeBytes / 1024).toFixed(2)} KB)
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        {query?.name && <Chip size="small" label={query.name} />}
+                        {bssidCount !== undefined && (
+                            <Chip size="small" label={`${bssidCount.toLocaleString()} BSSIDs`} color="primary" variant="outlined" />
+                        )}
+                        {query?.center?.lat !== undefined && query?.center?.lon !== undefined && (
+                            <Chip
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontFamily: "monospace" }}
+                                label={`Center: ${query.center.lat.toFixed(5)}, ${query.center.lon.toFixed(5)}`}
+                            />
+                        )}
+                        {query?.radius_km !== undefined && (
+                            <Chip size="small" variant="outlined" label={`Radius: ${query.radius_km} km`} />
+                        )}
+                        {queriedAt && !isNaN(queriedAt.getTime()) && (
+                            <Chip size="small" variant="outlined" label={`Queried: ${queriedAt.toLocaleString()}`} />
+                        )}
+                    </Stack>
                 </Stack>
-            </Stack>
-        </Alert>
+            </Alert>
+
+            {(points.length > 0 || centerMarker) && (
+                <BssidScanMap points={points} centerMarker={centerMarker} />
+            )}
+        </Stack>
     );
 }

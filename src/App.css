@@ -2,3 +2,9 @@
     height: 100%;
     width: 100%;
 }
+
+/* Tints the default Leaflet marker red for the "active" pin (the one
+   being added/edited) so it stands out from other saved-location pins. */
+.active-location-marker {
+    filter: hue-rotate(140deg) saturate(1.6);
+}
