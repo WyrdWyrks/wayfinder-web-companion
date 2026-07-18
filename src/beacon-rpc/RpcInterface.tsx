@@ -73,6 +73,14 @@ export type AddSavedLocationRequest = {
     Lng: number;
 }
 
+export type DeleteSavedLocationRequest = {
+    Idx: number;
+}
+
+export type DeleteSavedLocationResponse = {
+    Success: boolean;
+}
+
 export type ClearWifiGeoDbRequest = {
     path?: string;
 }
@@ -118,6 +126,7 @@ export default interface RpcInterface {
     getSavedLocations(): Promise<SavedLocationsResponse>;
     addSavedLocation(request: AddSavedLocationRequest): Promise<void>;
     updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse>;
+    deleteSavedLocation(request: DeleteSavedLocationRequest): Promise<DeleteSavedLocationResponse>;
     clearWifiGeoDb(request?: ClearWifiGeoDbRequest): Promise<ClearWifiGeoDbResponse>;
     insertWifiGeoDbBlock(request: InsertWifiGeoDbBlockRequest): Promise<InsertWifiGeoDbBlockResponse>;
     getWifiGeoDbInfo(request?: GetWifiGeoDbInfoRequest): Promise<GetWifiGeoDbInfoResponse>;
@@ -163,6 +172,9 @@ export abstract class BaseRPC implements RpcInterface {
     }
     updateSavedLocation(request: UpdateSavedLocationRequest): Promise<UpdateSavedLocationResponse> {
         return this.call('UpdateSavedLocation', request);
+    }
+    deleteSavedLocation(request: DeleteSavedLocationRequest): Promise<DeleteSavedLocationResponse> {
+        return this.call('DeleteSavedLocation', request);
     }
     clearWifiGeoDb(request: ClearWifiGeoDbRequest = {}): Promise<ClearWifiGeoDbResponse> {
         return this.call('ClearWifiGeoDb', request);

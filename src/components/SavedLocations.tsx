@@ -14,6 +14,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import AddLocationIcon from "@mui/icons-material/AddLocation";
@@ -30,8 +31,17 @@ function parsePosition(lat: string, lng: string): [number, number] | null {
     return [parsedLat, parsedLng];
 }
 
+// SavedLocation has no server-assigned id — the device only knows positions
+// by array index (Idx). React needs something stable to key list items on,
+// though: keying by array index makes a card's local state (e.g. isDeleting)
+// stick to a *position* rather than an entry, so deleting one card leaves
+// its leftover state on whichever card slides up into that slot. This
+// mints a stable client-side id per entry, independent of Idx.
+type KeyedLocation = SavedLocation & { _key: number };
+
 export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
-    const [locations, setLocations] = React.useState<SavedLocation[]>([]);
+    const [locations, setLocations] = React.useState<KeyedLocation[]>([]);
+    const nextKeyRef = useRef(0);
 
     // Only one location is ever being positioned at a time: either the new
     // one (editingIdx === null) or an existing one being edited. The shared
@@ -44,7 +54,7 @@ export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
     useEffect(() => {
         if (!rpc) return;
         rpc.getSavedLocations().then(response => {
-            setLocations(response.Locations);
+            setLocations(response.Locations.map(loc => ({ ...loc, _key: nextKeyRef.current++ })));
         });
     }, [rpc]);
 
@@ -73,6 +83,14 @@ export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
         });
     };
 
+    const handleDeleted = (index: number) => {
+        setLocations(prev => prev.filter((_, i) => i !== index));
+        // Idx is positional on the device too, so every later item just
+        // shifted down by one — simplest to just drop out of edit mode
+        // rather than try to track the shift.
+        setEditingIdx(null);
+    };
+
     return (
         <>
             <Typography sx={{ mt: 4, mb: 2 }} variant="h6" component="div">
@@ -88,7 +106,7 @@ export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
                             lng={newPosition.lng}
                             onPositionChange={(lat, lng) => setNewPosition({ lat, lng })}
                             onAdded={(added) => {
-                                setLocations(prev => [...prev, added]);
+                                setLocations(prev => [...prev, { ...added, _key: nextKeyRef.current++ }]);
                                 setNewPosition({ lat: '', lng: '' });
                             }}
                         />
@@ -98,7 +116,7 @@ export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
 
                     <Stack direction="column" spacing={2} sx={{ mt: 2 }}>
                         {locations.map((loc, index) => (
-                            <Box key={index} ref={(el: HTMLDivElement | null) => { cardRefs.current[index] = el; }}>
+                            <Box key={loc._key} ref={(el: HTMLDivElement | null) => { cardRefs.current[index] = el; }}>
                                 <LocationCard
                                     idx={index}
                                     location={loc}
@@ -110,9 +128,10 @@ export function SavedLocations({ rpc }: { rpc?: RpcInterface }) {
                                     onStopEdit={() => setEditingIdx(null)}
                                     onEditPositionChange={(lat, lng) => setEditPosition({ lat, lng })}
                                     onSaved={(updated) => {
-                                        setLocations(prev => prev.map((l, i) => i === index ? updated : l));
+                                        setLocations(prev => prev.map((l, i) => i === index ? { ...updated, _key: l._key } : l));
                                         setEditingIdx(null);
                                     }}
+                                    onDeleted={() => handleDeleted(index)}
                                 />
                             </Box>
                         ))}
@@ -215,7 +234,7 @@ function NewLocationForm({ rpc, lat, lng, onPositionChange, onAdded }: {
     );
 }
 
-function LocationCard({ location, idx, rpc, isEditing, editLat, editLng, onStartEdit, onStopEdit, onEditPositionChange, onSaved }: {
+function LocationCard({ location, idx, rpc, isEditing, editLat, editLng, onStartEdit, onStopEdit, onEditPositionChange, onSaved, onDeleted }: {
     location: SavedLocation;
     idx: number;
     rpc: RpcInterface;
@@ -226,10 +245,13 @@ function LocationCard({ location, idx, rpc, isEditing, editLat, editLng, onStart
     onStopEdit: () => void;
     onEditPositionChange: (lat: string, lng: string) => void;
     onSaved: (updated: SavedLocation) => void;
+    onDeleted: () => void;
 }) {
     const [editName, setEditName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // Edit mode can also be entered from outside (clicking this location's
     // pin on the map), bypassing handleEdit below — so name needs to sync
@@ -251,6 +273,23 @@ function LocationCard({ location, idx, rpc, isEditing, editLat, editLng, onStart
     const handleCancel = () => {
         setSaveError(null);
         onStopEdit();
+    };
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        setDeleteError(null);
+        try {
+            const result = await rpc.deleteSavedLocation({ Idx: idx });
+            if (result.Success) {
+                onDeleted();
+            } else {
+                setDeleteError('Device rejected the delete');
+                setIsDeleting(false);
+            }
+        } catch (e) {
+            setDeleteError(e instanceof Error ? e.message : 'Failed to delete');
+            setIsDeleting(false);
+        }
     };
 
     const handleSave = async () => {
@@ -336,33 +375,40 @@ function LocationCard({ location, idx, rpc, isEditing, editLat, editLng, onStart
                         {location.Name}
                     </Typography>
 
-                    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-                            <LocationOnIcon color="primary" sx={{ fontSize: 24, flexShrink: 0 }} />
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontFamily: 'monospace', overflowWrap: 'break-word' }}
-                            >
-                                {location.Lat.toFixed(5)}, {location.Lng.toFixed(5)}
-                            </Typography>
-                        </Stack>
-
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
-                            <IconButton size="small" color="primary" onClick={handleEdit} sx={iconButtonSx}>
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                                color="primary"
-                                aria-label="view on google maps"
-                                href={googleMapsUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <OpenInNewIcon />
-                            </IconButton>
-                        </Stack>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+                        <LocationOnIcon color="primary" sx={{ fontSize: 24, flexShrink: 0 }} />
+                        <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ fontFamily: 'monospace', overflowWrap: 'break-word', minWidth: 0 }}
+                        >
+                            {location.Lat.toFixed(5)}, {location.Lng.toFixed(5)}
+                        </Typography>
                     </Stack>
+
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end">
+                        <IconButton size="small" color="primary" onClick={handleEdit} sx={iconButtonSx}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" color="error" onClick={handleDelete} disabled={isDeleting} sx={iconButtonSx}>
+                            {isDeleting ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" />}
+                        </IconButton>
+                        <IconButton
+                            color="primary"
+                            aria-label="view on google maps"
+                            href={googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <OpenInNewIcon />
+                        </IconButton>
+                    </Stack>
+
+                    {deleteError && (
+                        <Typography variant="caption" color="error">
+                            {deleteError}
+                        </Typography>
+                    )}
                 </Stack>
             </CardContent>
         </Card>
