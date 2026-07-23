@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { defaultMarkerIcon } from "./leafletIcons";
 
 const DEFAULT_CENTER: [number, number] = [20, 0];
 const DEFAULT_ZOOM = 2;
@@ -30,7 +31,7 @@ function PointsLayer({ points, centerMarker }: {
         }
 
         if (centerMarker) {
-            L.marker([centerMarker.lat, centerMarker.lon]).addTo(layerGroup);
+            L.marker([centerMarker.lat, centerMarker.lon], { icon: defaultMarkerIcon }).addTo(layerGroup);
             if (centerMarker.radiusKm) {
                 L.circle([centerMarker.lat, centerMarker.lon], {
                     radius: centerMarker.radiusKm * 1000,

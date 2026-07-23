@@ -17,8 +17,8 @@ export default defineConfig({
     },
 
     manifest: {
-      name: 'degen-beacon-web',
-      short_name: 'degen-beacon-web',
+      name: 'Wayfinder Web Companion',
+      short_name: 'Wayfinder',
       description: 'Wayfinder Web Companion',
       theme_color: '#fc6203',
     },
