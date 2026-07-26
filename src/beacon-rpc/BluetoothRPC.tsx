@@ -1,7 +1,7 @@
 /// <reference types="web-bluetooth" />
 import { decode, encode } from "@msgpack/msgpack";
 import type { DeviceInformation } from "./RpcInterface";
-import { BaseRPC } from "./RpcInterface";
+import { BaseRPC, throwIfRpcError } from "./RpcInterface";
 
 
 const DEGEN_SERVICE_UUID = '033c3d34-8405-46db-8326-07169d5353a9';
@@ -106,7 +106,7 @@ class BluetoothRPC extends BaseRPC {
 
         const responseData = await new Blob(dataChunks).arrayBuffer();
         console.log(responseData);
-        return decode(new Uint8Array(responseData)) as T;
+        return throwIfRpcError(functionName, decode(new Uint8Array(responseData)) as T);
     }
 }
 

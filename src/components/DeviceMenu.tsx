@@ -11,6 +11,8 @@ import Settings from "@mui/icons-material/Settings";
 import Container from "@mui/material/Container";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import type { Theme } from "@mui/material/styles";
 import Message from "@mui/icons-material/Message";
 import PinDrop from "@mui/icons-material/PinDrop";
 import SystemUpdateAlt from "@mui/icons-material/SystemUpdateAlt";
@@ -33,6 +35,7 @@ export function DeviceMenu({ rpc, deviceInfo, offline, onReturnToConnect }: {
   onReturnToConnect: () => void;
 }) {
   const [tabValue, setTabValue] = React.useState(0);
+  const isWide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'));
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -51,14 +54,17 @@ export function DeviceMenu({ rpc, deviceInfo, offline, onReturnToConnect }: {
     <>
       <DeviceInfoToolbar deviceInfo={deviceInfo} offline={offline} onReturnToConnect={onReturnToConnect} />
 
-      <Container maxWidth="sm" sx={{ mt: 2}}>
+      <Container maxWidth="lg" sx={{ mt: 2 }}>
+        {/* Scrollable only where the tabs genuinely don't fit (narrow
+            screens); from md up there's room for all of them, so they get
+            centered instead of parked at the left edge with scroll arrows. */}
         <Tabs
           value={tabValue}
           onChange={handleTabChange}
-          variant="scrollable"
+          variant={isWide ? "standard" : "scrollable"}
           scrollButtons="auto"
           allowScrollButtonsMobile
-          centered={false}
+          centered={isWide}
         >
           {tabs.map((tab, index) => (
             <Tab key={index} icon={tab.icon} label={tab.label} sx={{ minWidth: 72 }} />
@@ -155,7 +161,9 @@ function DeviceInfoToolbar({ deviceInfo, offline, onReturnToConnect }: {
               Device ID
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-              0x{info.DeviceID.toString(16).toUpperCase()}
+              {typeof info.DeviceID === 'number'
+                ? `0x${info.DeviceID.toString(16).toUpperCase()}`
+                : '—'}
             </Typography>
           </Box>
 

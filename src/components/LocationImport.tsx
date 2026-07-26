@@ -16,9 +16,12 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DownloadIcon from "@mui/icons-material/Download";
 import MapIcon from "@mui/icons-material/Map";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import DeleteIcon from "@mui/icons-material/Delete";
 import type RpcInterface from "../beacon-rpc/RpcInterface";
 import type { GetWifiGeoDbInfoResponse } from "../beacon-rpc/RpcInterface";
 import { buildWifiGeoDb, chunkWifiGeoDb, parseGeoResults } from "../wifi-geo-db/GeoDbBuilder";
+import { deleteGeoFile, listSavedGeoFiles, saveGeoFile, type SavedGeoFile } from "../wifi-geo-db/SavedGeoFiles";
 import { BssidScanMap } from "./ext/BssidScanMap";
 
 const LVCC_TEMPLATE_URL = "/data/lvcc-locations.json";
@@ -59,6 +62,12 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
     const [importProgress, setImportProgress] = useState(0);
     const [importMessage, setImportMessage] = useState<{ type: "success" | "error" | "info", text: string } | null>(null);
 
+    const [savedFiles, setSavedFiles] = useState<SavedGeoFile[]>([]);
+
+    useEffect(() => {
+        listSavedGeoFiles().then(setSavedFiles);
+    }, []);
+
     const [deviceDbInfo, setDeviceDbInfo] = useState<GetWifiGeoDbInfoResponse | null>(null);
     const [deviceDbLoading, setDeviceDbLoading] = useState(true);
     const [deviceDbError, setDeviceDbError] = useState<string | null>(null);
@@ -93,13 +102,58 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
         if (!file) return;
 
         setError(null);
+
+        let content: string;
+        let parsed: BssidQueryFile;
         try {
-            const content = await file.text();
-            const parsed = JSON.parse(content);
-            setLoaded({ name: file.name, sizeBytes: file.size, content, parsed });
+            content = await file.text();
+            parsed = JSON.parse(content);
         } catch {
             setLoaded(null);
             setError(`"${file.name}" is not valid JSON.`);
+            return;
+        }
+
+        setLoaded({ name: file.name, sizeBytes: file.size, content, parsed });
+
+        // Only persist files that actually parsed as usable location data —
+        // valid JSON with no recognizable BSSID/lat/lon entries isn't worth
+        // keeping around. Same filename overwrites the previous save.
+        const { records } = parseGeoResults(parsed?.results ?? []);
+        if (records.length === 0) return;
+
+        try {
+            setSavedFiles(await saveGeoFile({
+                name: file.name,
+                content,
+                sizeBytes: file.size,
+                bssidCount: records.length,
+                queryName: parsed?.query?.name,
+            }));
+        } catch (e) {
+            // The file is still loaded and usable this session — only the
+            // persistence failed, so say that rather than implying the file
+            // itself was bad.
+            setError(`Loaded "${file.name}", but saving it for later failed: `
+                + (e instanceof Error ? e.message : "storage unavailable"));
+        }
+    };
+
+    const handleLoadSaved = (saved: SavedGeoFile) => {
+        setError(null);
+        try {
+            const parsed = JSON.parse(saved.content);
+            setLoaded({ name: saved.name, sizeBytes: saved.sizeBytes, content: saved.content, parsed });
+        } catch {
+            setError(`"${saved.name}" is no longer valid JSON.`);
+        }
+    };
+
+    const handleDeleteSaved = async (name: string) => {
+        try {
+            setSavedFiles(await deleteGeoFile(name));
+        } catch (e) {
+            setError(`Failed to delete "${name}": ` + (e instanceof Error ? e.message : "storage unavailable"));
         }
     };
 
@@ -279,6 +333,14 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
                             </Button>
                         </Stack>
 
+                        {savedFiles.length > 0 && (
+                            <SavedFilesList
+                                files={savedFiles}
+                                onLoad={handleLoadSaved}
+                                onDelete={handleDeleteSaved}
+                            />
+                        )}
+
                         {loaded && <LoadedFileSummary loaded={loaded} />}
 
                         {importMessage && (
@@ -315,6 +377,51 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
                     </Stack>
                 </CardContent>
             </Card>
+        </Box>
+    );
+}
+
+function SavedFilesList({ files, onLoad, onDelete }: {
+    files: SavedGeoFile[];
+    onLoad: (file: SavedGeoFile) => void;
+    onDelete: (name: string) => void;
+}) {
+    return (
+        <Box>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ marginBottom: "0.5em" }}>
+                Saved Files
+            </Typography>
+            <Stack spacing={1}>
+                {files.map((f) => (
+                    <Stack
+                        key={f.name}
+                        spacing={0.5}
+                        sx={{
+                            padding: "0.5em 0.75em",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                        }}
+                    >
+                        <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "break-word" }}>
+                            {f.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "break-word" }}>
+                            {f.bssidCount.toLocaleString()} BSSIDs
+                            {f.queryName ? ` · ${f.queryName}` : ""}
+                            {` · ${(f.sizeBytes / 1024).toFixed(1)} KB · ${new Date(f.savedAt).toLocaleString()}`}
+                        </Typography>
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button size="small" startIcon={<FolderOpenIcon />} onClick={() => onLoad(f)}>
+                                Load
+                            </Button>
+                            <IconButton size="small" color="error" onClick={() => onDelete(f.name)}>
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Stack>
+                    </Stack>
+                ))}
+            </Stack>
         </Box>
     );
 }

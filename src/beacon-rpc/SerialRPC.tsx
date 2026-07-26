@@ -2,7 +2,7 @@
 /// RPC over web serial API
 
 import type { DeviceInformation } from "./RpcInterface";
-import { BaseRPC } from "./RpcInterface";
+import { BaseRPC, throwIfRpcError } from "./RpcInterface";
 
 export async function connectToSerialDevice(): Promise<SerialRPC> {
     const port = await navigator.serial.requestPort();
@@ -74,7 +74,7 @@ class SerialRPC extends BaseRPC {
             console.log("Read " + line);
 
             if (line?.startsWith("RPC<--")) {
-                return JSON.parse(line.replace("RPC<--", "")) as T;
+                return throwIfRpcError(functionName, JSON.parse(line.replace("RPC<--", "")) as T);
             }
         }
     }

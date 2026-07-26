@@ -18,6 +18,7 @@ import Step from '@mui/material/Step';
 import StepContent from '@mui/material/StepContent';
 import StepLabel from '@mui/material/StepLabel';
 import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
 import type BeaconState from '../BeaconState.tsx';
 import type RpcInterface from '../beacon-rpc/RpcInterface.tsx';
 
@@ -39,22 +40,46 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
 
   const handleConnect = async () => {
     setConnectButtonLoading(true);
+    setConnectError(null);
 
-    let rpc: RpcInterface;
-    if (connectionMethod === 'bluetooth') {
-      rpc = await connectToBluetoothDevice();
-    } else if (connectionMethod == 'serial') {
-      rpc = await connectToSerialDevice();
-    } else if (connectionMethod === 'wifi') {
-      rpc = new HttpRPC(ipAddress);
-    } else {
-      throw new Error('Invalid connection method');
+    let rpc: RpcInterface | undefined;
+    try {
+      if (connectionMethod === 'bluetooth') {
+        rpc = await connectToBluetoothDevice();
+      } else if (connectionMethod == 'serial') {
+        rpc = await connectToSerialDevice();
+      } else if (connectionMethod === 'wifi') {
+        rpc = new HttpRPC(ipAddress);
+      } else {
+        throw new Error('Invalid connection method');
+      }
+
+      const info = await rpc.getDeviceInformation();
+      // A device that is still booting can answer before its RPCs are
+      // registered, replying with an error code instead of device info.
+      // Without this check the app would proceed with undefined fields and
+      // crash rendering the toolbar.
+      if (info?.DeviceID === undefined || info?.HardwareVersion === undefined) {
+        throw new Error(
+          'The device responded but did not report its information. '
+          + 'If it was just powered on, give it a few seconds and try again.'
+        );
+      }
+
+      console.log('Connected to device:', info, rpc);
+      setBeacon({ connected: true, rpc, initialDeviceInformation: info });
+    } catch (e) {
+      // Release the port/GATT connection we may have just opened, otherwise
+      // it stays held and the next attempt fails for a different reason.
+      try {
+        await rpc?.disconnect();
+      } catch (disconnectError) {
+        console.error('Error releasing connection after failed connect:', disconnectError);
+      }
+      setConnectError(e instanceof Error ? e.message : 'Failed to connect to the device.');
+    } finally {
+      setConnectButtonLoading(false);
     }
-
-    const info = await rpc.getDeviceInformation();
-    console.log('Connected to device:', info, rpc);
-    setBeacon({ connected: true, rpc, initialDeviceInformation: info });
-
   };
 
   const [ipAddress, setIpAddress] = React.useState('');
@@ -63,6 +88,7 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
   }
 
   const [connectButtonLoading, setConnectButtonLoading] = React.useState(false);
+  const [connectError, setConnectError] = React.useState<string | null>(null);
 
   return (
     <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
@@ -73,6 +99,12 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
           </Typography>
         } />
         <CardContent>
+
+          {connectError && (
+            <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }} onClose={() => setConnectError(null)}>
+              {connectError}
+            </Alert>
+          )}
 
           <Box textAlign='left' sx={{ maxWidth: 400 }}>
             <Stepper activeStep={activeStep} orientation="vertical">

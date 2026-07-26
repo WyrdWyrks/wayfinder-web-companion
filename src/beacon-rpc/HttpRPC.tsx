@@ -1,6 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack";
 import type { DeviceInformation } from "./RpcInterface";
-import { BaseRPC } from "./RpcInterface";
+import { BaseRPC, throwIfRpcError } from "./RpcInterface";
 
 class HttpRPC extends BaseRPC {
     ipAddress: string;
@@ -22,7 +22,7 @@ class HttpRPC extends BaseRPC {
             body: encodeMsgPack(body),
         });
         const responseData = await response.arrayBuffer();
-        return decode(responseData) as T;
+        return throwIfRpcError(functionName, decode(responseData) as T);
     }
 }
 

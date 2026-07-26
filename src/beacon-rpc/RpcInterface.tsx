@@ -1,5 +1,41 @@
 import type { ConfigValue } from "./ConfigValue";
 
+// When an RPC doesn't succeed, the firmware discards the payload and replies
+// with just a return code under "R" (see RpcUtils.h's RpcReturnCode /
+// RPC_RETURN_CODE_FIELD, and RpcManager.h's ProcessRpcChannels). Without
+// checking for it, callers happily destructure that error object as if it
+// were real data and fail later with confusing undefined-property errors.
+const RPC_RETURN_CODE_FIELD = "R";
+
+const RPC_RETURN_CODE_MESSAGES: Record<number, string> = {
+    2: "the device does not recognize this command — it may still be booting, or be running firmware that predates it",
+    3: "the device reported an error running this command",
+};
+
+export class RpcError extends Error {
+    readonly returnCode: number;
+    constructor(functionName: string, returnCode: number) {
+        const detail = RPC_RETURN_CODE_MESSAGES[returnCode] ?? `error code ${returnCode}`;
+        super(`${functionName} failed: ${detail}`);
+        this.name = "RpcError";
+        this.returnCode = returnCode;
+    }
+}
+
+// Throws when `response` is a firmware error reply; otherwise returns it
+// unchanged. Every transport runs its responses through this so the failure
+// surfaces at the call that caused it.
+export function throwIfRpcError<T>(functionName: string, response: T): T {
+    if (response && typeof response === "object") {
+        const code = (response as Record<string, unknown>)[RPC_RETURN_CODE_FIELD];
+        // Success can also come back as a bare {"R": 0}; only non-zero is an error.
+        if (typeof code === "number" && code !== 0 && code !== 1) {
+            throw new RpcError(functionName, code);
+        }
+    }
+    return response;
+}
+
 export type DeviceInformation = {
     DeviceName: string;
     DeviceID: number;
