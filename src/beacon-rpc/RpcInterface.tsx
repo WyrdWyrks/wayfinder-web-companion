@@ -66,6 +66,14 @@ export type DisplayContentsResponse = {
     buffer: string,
 }
 
+export type SendDisplayInputRequest = {
+    InputID: number;
+}
+
+export type SendDisplayInputResponse = {
+    Success: boolean;
+}
+
 export type AddSavedMessageRequest = {
     Message: string;
 }
@@ -167,6 +175,7 @@ export default interface RpcInterface {
     insertWifiGeoDbBlock(request: InsertWifiGeoDbBlockRequest): Promise<InsertWifiGeoDbBlockResponse>;
     getWifiGeoDbInfo(request?: GetWifiGeoDbInfoRequest): Promise<GetWifiGeoDbInfoResponse>;
     getDisplayContents(): Promise<DisplayContentsResponse>;
+    sendDisplayInput(request: SendDisplayInputRequest): Promise<SendDisplayInputResponse>;
 
     getSavedMessages(): Promise<SavedMessagesResponse>;
     updateSavedMessage(request: UpdateSavedMessageRequest): Promise<UpdateSavedMessageResponse>;
@@ -229,5 +238,8 @@ export abstract class BaseRPC implements RpcInterface {
     }
     getDisplayContents(): Promise<DisplayContentsResponse> {
         return this.call('GetDisplayContents');
+    }
+    sendDisplayInput(request: SendDisplayInputRequest): Promise<SendDisplayInputResponse> {
+        return this.call('SendDisplayInput', request);
     }
 }

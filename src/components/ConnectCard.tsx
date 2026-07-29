@@ -20,9 +20,8 @@ import StepLabel from '@mui/material/StepLabel';
 import TextField from '@mui/material/TextField';
 import Alert from '@mui/material/Alert';
 import type BeaconState from '../BeaconState.tsx';
+import type { ConnectionMethod } from '../BeaconState.tsx';
 import type RpcInterface from '../beacon-rpc/RpcInterface.tsx';
-
-type ConnectionMethod = 'serial' | 'wifi' | 'bluetooth';
 
 export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<React.SetStateAction<BeaconState>> }) {
   const [activeStep, setActiveStep] = React.useState(0);
@@ -67,7 +66,7 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
       }
 
       console.log('Connected to device:', info, rpc);
-      setBeacon({ connected: true, rpc, initialDeviceInformation: info });
+      setBeacon({ connected: true, rpc, connectionMethod, initialDeviceInformation: info });
     } catch (e) {
       // Release the port/GATT connection we may have just opened, otherwise
       // it stays held and the next attempt fails for a different reason.

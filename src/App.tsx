@@ -63,6 +63,7 @@ function AppContent() {
         <DeviceMenu
           rpc={rpc}
           deviceInfo={beacon.initialDeviceInformation}
+          connectionMethod={beacon.connectionMethod}
           offline={!beacon.connected}
           onReturnToConnect={handleReturnToConnect}
         />

@@ -21,6 +21,7 @@ import UploadFile from "@mui/icons-material/UploadFile";
 import WifiOffIcon from "@mui/icons-material/WifiOff";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 import type RpcInterface from "../beacon-rpc/RpcInterface";
+import type { ConnectionMethod } from "../BeaconState";
 import { ScreenTab } from "./ScreenTab";
 import { SavedMessages } from "./SavedMessages";
 import { SavedLocations } from "./SavedLocations";
@@ -28,9 +29,10 @@ import { LocationImport } from "./LocationImport";
 import { Settings as SettingsComponent } from "./Settings";
 import { Firmware } from "./Firmware";
 
-export function DeviceMenu({ rpc, deviceInfo, offline, onReturnToConnect }: {
+export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onReturnToConnect }: {
   rpc?: RpcInterface;
   deviceInfo?: DeviceInformation;
+  connectionMethod?: ConnectionMethod;
   offline: boolean;
   onReturnToConnect: () => void;
 }) {
@@ -41,13 +43,20 @@ export function DeviceMenu({ rpc, deviceInfo, offline, onReturnToConnect }: {
     setTabValue(newValue);
   };
 
+  // Streaming the framebuffer is only practical over serial — WiFi and
+  // Bluetooth can't keep up with the repeated full-display reads, so the tab
+  // isn't offered on those transports (nor in offline mode).
+  const supportsScreenMirroring = connectionMethod === 'serial';
+
   const tabs = [
     { icon: <Message />, label: "Messages", component: <SavedMessages rpc={rpc} /> },
     { icon: <PinDrop />, label: "Locations", component: <SavedLocations rpc={rpc} /> },
     { icon: <UploadFile />, label: "Geolocation", component: <LocationImport rpc={rpc} /> },
     { icon: <Settings />, label: "Settings", component: <SettingsComponent rpc={rpc} /> },
     { icon: <SystemUpdateAlt />, label: "Firmware", component: <Firmware deviceInfo={deviceInfo} rpc={rpc} /> },
-  { icon: <ScreenShare />, label: "Screen", component: <ScreenTab rpc={rpc} deviceInfo={deviceInfo} /> },
+    ...(supportsScreenMirroring
+      ? [{ icon: <ScreenShare />, label: "Screen", component: <ScreenTab rpc={rpc} deviceInfo={deviceInfo} /> }]
+      : []),
   ];
 
   return (
