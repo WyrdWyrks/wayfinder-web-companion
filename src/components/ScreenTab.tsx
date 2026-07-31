@@ -148,18 +148,25 @@ export function ScreenTab({ rpc, deviceInfo }: { rpc?: any, deviceInfo?: any }) 
         if (!display || !canvasRef.current) return;
         const ctx = canvasRef.current.getContext("2d");
         if (!ctx) return;
-        const { width, height, buffer } = display;
+        const { width, height, buffer, virtual } = display;
         const bin = atob(buffer);
         const imageData = ctx.createImageData(width, height);
-        // Both the SSD1306 and the Adafruit SH1107 (1bpp, via Adafruit_GrayOLED)
-        // use a page-based buffer: each byte is a vertical column of 8 pixels,
-        // laid out as buffer[x + (y / 8) * width] with the LSB at the top.
+        // A virtual display hands back its GFXcanvas1 buffer, which is
+        // row-major with each row padded out to a whole byte and the leftmost
+        // pixel in the high bit. Physical panels (SSD1306, and the Adafruit
+        // SH1107 at 1bpp via Adafruit_GrayOLED) instead use a page-based
+        // buffer: each byte is a vertical column of 8 pixels, laid out as
+        // buffer[x + (y / 8) * width] with the LSB at the top.
+        const bytesPerRow = (width + 7) >> 3;
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                const byteIndex = x + Math.floor(y / 8) * width;
-                const bit = y % 8;
+                const byteIndex = virtual
+                    ? (x >> 3) + y * bytesPerRow
+                    : x + Math.floor(y / 8) * width;
                 const byte = bin.charCodeAt(byteIndex);
-                const pixelOn = (byte >> bit) & 1;
+                const pixelOn = virtual
+                    ? (byte >> (7 - (x % 8))) & 1
+                    : (byte >> (y % 8)) & 1;
                 const color = pixelOn ? 255 : 0;
                 const idx = (y * width + x) * 4;
                 imageData.data[idx + 0] = color;

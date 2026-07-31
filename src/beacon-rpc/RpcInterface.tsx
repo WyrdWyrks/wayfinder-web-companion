@@ -64,6 +64,10 @@ export type DisplayContentsResponse = {
     width: number,
     height: number,
     buffer: string,
+    // Set when the frame came from a virtual (canvas-backed) display rather
+    // than a physical panel, which means the buffer is laid out the way
+    // Adafruit's GFXcanvas1 stores it instead of the panel's page format.
+    virtual?: boolean,
 }
 
 export type SendDisplayInputRequest = {
