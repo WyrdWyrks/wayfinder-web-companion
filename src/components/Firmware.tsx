@@ -14,9 +14,19 @@ import Alert from "@mui/material/Alert";
 import Link from "@mui/material/Link";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import MemoryIcon from "@mui/icons-material/Memory";
+import DownloadIcon from "@mui/icons-material/Download";
+import { uploadFirmware } from "../firmware/OtaUpdate";
 
 const RELEASES_API_URL =
     'https://api.github.com/repos/Blake-Ballew/Celestial-Wayfinder/releases?per_page=30';
+
+// GitHub serves release assets from a host that sends no CORS headers, so the
+// PWA can't fetch a .bin straight off a release. The project's GitHub Pages
+// site mirrors each release's assets at <base>/<tag>/<asset name> and does
+// send `Access-Control-Allow-Origin: *`, which is what makes a one-click
+// install possible. Releases published before the mirror existed aren't there,
+// hence the fallback in handleInstallRelease.
+const FIRMWARE_MIRROR_BASE = 'https://wyrdwyrks.com/Celestial-Wayfinder';
 
 // Release assets are named e.g. "firmware-hardware-v3-3.7.0.bin"; the captured
 // group is the hardware version the firmware is built for.
@@ -30,7 +40,8 @@ type FirmwareRelease = {
     date: string;
     description: string;
     hwVersion: number;
-    downloadUrl: string;
+    mirrorUrl: string; // CORS-enabled copy on GitHub Pages; fetchable from here
+    downloadUrl: string; // GitHub's own asset URL; only usable as a browser download
     htmlUrl: string;
     assetName: string;
 };
@@ -78,6 +89,7 @@ async function fetchCompatibleFirmware(
             date: (release.published_at ?? '').slice(0, 10),
             description: (release.body ?? '').trim() || release.name || 'No release notes provided.',
             hwVersion: hardwareVersion,
+            mirrorUrl: `${FIRMWARE_MIRROR_BASE}/${encodeURIComponent(release.tag_name)}/${encodeURIComponent(asset.name)}`,
             downloadUrl: asset.browser_download_url,
             htmlUrl: release.html_url,
             assetName: asset.name,
@@ -87,14 +99,78 @@ async function fetchCompatibleFirmware(
     return compatible;
 }
 
-export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?: DeviceInformation }) {
-    rpc; // TODO: use rpc here to actually upload firmware
+// Pulls a firmware image into memory so it can be streamed to the device.
+// Only the GitHub Pages mirror can be read this way — see FIRMWARE_MIRROR_BASE.
+async function downloadFirmwareAsset(url: string): Promise<Uint8Array> {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+}
 
+function triggerBrowserDownload(release: FirmwareRelease): void {
+    const link = document.createElement('a');
+    link.href = release.downloadUrl;
+    // Cross-origin downloads ignore this, but GitHub already serves the asset
+    // as an attachment with the right filename.
+    link.download = release.assetName;
+    link.click();
+}
+
+function formatBytes(bytes: number): string {
+    return bytes >= 1024 * 1024
+        ? `${(bytes / 1024 / 1024).toFixed(2)} MB`
+        : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function formatDuration(seconds: number): string {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+// Byte-level progress with an ETA — a full image takes minutes over serial or
+// BLE, so a bare percentage doesn't tell the user whether it's still moving.
+function UploadProgress({ bytesSent, totalBytes, startedAt }: {
+    bytesSent: number;
+    totalBytes: number;
+    startedAt: number;
+}) {
+    const percent = totalBytes > 0 ? (bytesSent / totalBytes) * 100 : 0;
+    const elapsed = (Date.now() - startedAt) / 1000;
+    // No estimate until there's enough of a sample to make one worth showing.
+    const remaining = bytesSent > 0 && elapsed > 2
+        ? (totalBytes - bytesSent) / (bytesSent / elapsed)
+        : null;
+
+    return (
+        <Box sx={{ marginBottom: '1em' }}>
+            <Stack direction="row" justifyContent="space-between" sx={{ marginBottom: '0.5em' }}>
+                <Typography variant="body2" color="text.secondary">
+                    {formatBytes(bytesSent)} of {formatBytes(totalBytes)} ({percent.toFixed(1)}%)
+                </Typography>
+                {remaining !== null && (
+                    <Typography variant="body2" color="text.secondary">
+                        about {formatDuration(remaining)} left
+                    </Typography>
+                )}
+            </Stack>
+            <LinearProgress variant="determinate" value={percent} />
+        </Box>
+    );
+}
+
+export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?: DeviceInformation }) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFirmware, setSelectedFirmware] = useState<string | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
+    const [busy, setBusy] = useState<null | 'downloading' | 'uploading'>(null);
+    const [progress, setProgress] = useState<{ bytesSent: number, totalBytes: number, startedAt: number } | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+    // Set when an in-browser download of a release asset failed, so the UI can
+    // offer the manual download-then-pick route instead.
+    const [manualDownload, setManualDownload] = useState<FirmwareRelease | null>(null);
+
+    const uploading = busy !== null;
 
     const [availableFirmware, setAvailableFirmware] = useState<FirmwareRelease[]>([]);
     const [loadingFirmware, setLoadingFirmware] = useState(true);
@@ -134,36 +210,97 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
 
     const reloadFirmware = useCallback(() => setReloadCount((c) => c + 1), []);
 
+    // Writing a half-finished image and then losing the tab leaves the device
+    // with an erased update partition, so make closing it take a deliberate
+    // click while an upload is in flight.
+    useEffect(() => {
+        if (!uploading) return;
+        const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [uploading]);
+
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
+        // Reset the input so re-picking the same file after a failed attempt
+        // still fires a change event.
+        event.target.value = '';
         if (file) {
             setSelectedFile(file);
             setMessage(null);
         }
     };
 
-    const handleUpload = async () => {
-        if (!selectedFile) return;
+    // Streams an image to the device and reports how it went. `label` names
+    // what's being written for the progress and result messages.
+    const runUpload = async (image: Uint8Array, label: string) => {
+        if (!rpc) return;
 
-        setUploading(true);
-        setUploadProgress(0);
-        setMessage({ type: 'info', text: 'Starting firmware upload...' });
+        const startedAt = Date.now();
+        setBusy('uploading');
+        setProgress({ bytesSent: 0, totalBytes: image.length, startedAt });
+        setMessage({
+            type: 'info',
+            text: `Writing ${label} (${formatBytes(image.length)}). Keep this tab open and leave the device connected.`,
+        });
 
         try {
-            // TODO: Implement actual firmware upload using rpc
-            // Simulate upload progress
-            for (let i = 0; i <= 100; i += 10) {
-                setUploadProgress(i);
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
-
-            setMessage({ type: 'success', text: 'Firmware uploaded successfully! Device will restart.' });
+            await uploadFirmware(rpc, image, ({ bytesSent, totalBytes }) => {
+                setProgress({ bytesSent, totalBytes, startedAt });
+            });
+            setMessage({
+                type: 'success',
+                text: `${label} written in ${formatDuration((Date.now() - startedAt) / 1000)}. `
+                    + 'Restart the beacon to boot into the new firmware.',
+            });
             setSelectedFile(null);
         } catch (error) {
-            setMessage({ type: 'error', text: `Upload failed: ${error}` });
+            setMessage({
+                type: 'error',
+                text: `Update failed: ${error instanceof Error ? error.message : String(error)}. `
+                    + 'The device is still running its current firmware — you can safely try again.',
+            });
         } finally {
-            setUploading(false);
+            setBusy(null);
+            setProgress(null);
         }
+    };
+
+    const handleUpload = async () => {
+        if (!selectedFile || !rpc) return;
+        setManualDownload(null);
+        await runUpload(new Uint8Array(await selectedFile.arrayBuffer()), selectedFile.name);
+    };
+
+    const handleInstallRelease = async () => {
+        const release = availableFirmware.find((f) => f.version === selectedFirmware);
+        if (!release || !rpc) return;
+
+        setManualDownload(null);
+        setBusy('downloading');
+        setMessage({ type: 'info', text: `Downloading ${release.assetName}...` });
+
+        let image: Uint8Array;
+        try {
+            image = await downloadFirmwareAsset(release.mirrorUrl);
+        } catch {
+            // Releases older than the mirror aren't on it, so fall back to a
+            // plain browser download of GitHub's own copy: a navigation isn't
+            // subject to the cross-origin rule that blocks fetching it, it just
+            // can't hand us the bytes — the user points the picker at the file.
+            setBusy(null);
+            setManualDownload(release);
+            triggerBrowserDownload(release);
+            setMessage({
+                type: 'info',
+                text: `${release.assetName} isn't available for direct install, so it's downloading through `
+                    + 'your browser instead. Once it finishes, pick the file under "Upload Custom Firmware" '
+                    + 'below to install it.',
+            });
+            return;
+        }
+
+        await runUpload(image, release.version);
     };
 
     if (!deviceInfo) {
@@ -202,6 +339,20 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
                     </Stack>
                 </CardContent>
             </Card>
+
+            {/* Update status — shared by both the release install and the
+                custom-file upload, since either can be running here. */}
+            {message && (
+                <Alert
+                    severity={message.type}
+                    sx={{ marginBottom: '1em' }}
+                    onClose={uploading ? undefined : () => setMessage(null)}
+                >
+                    {message.text}
+                </Alert>
+            )}
+
+            {progress && <UploadProgress {...progress} />}
 
             {/* Available Firmware */}
             <Card elevation={2} sx={{ marginBottom: '2em' }}>
@@ -300,19 +451,29 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
                     )}
 
                     {selectedFirmware && (
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={() => {
-                                // TODO: Download and install selected firmware
-                                setMessage({ type: 'info', text: `Installing firmware ${selectedFirmware}...` });
-                            }}
-                            disabled={uploading || versionsMatch(selectedFirmware, deviceInfo.FirmwareVersion)}
-                            fullWidth
-                            sx={{ marginTop: '1em' }}
-                        >
-                            Install Selected Firmware
-                        </Button>
+                        <Stack spacing={1} sx={{ marginTop: '1em' }}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleInstallRelease}
+                                disabled={!rpc || uploading || versionsMatch(selectedFirmware, deviceInfo.FirmwareVersion)}
+                                fullWidth
+                            >
+                                {busy === 'downloading' ? 'Downloading...' : 'Install Selected Firmware'}
+                            </Button>
+
+                            {manualDownload?.version === selectedFirmware && (
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DownloadIcon />}
+                                    href={manualDownload.downloadUrl}
+                                    download={manualDownload.assetName}
+                                    fullWidth
+                                >
+                                    Download {manualDownload.assetName} again
+                                </Button>
+                            )}
+                        </Stack>
                     )}
                 </CardContent>
             </Card>
@@ -324,16 +485,10 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
                         Upload Custom Firmware
                     </Typography>
 
-                    {message && (
-                        <Alert severity={message.type} sx={{ marginBottom: '1em' }}>
-                            {message.text}
-                        </Alert>
-                    )}
-
                     <Stack spacing={2}>
                         <Box>
                             <input
-                                accept=".bin,.hex,.elf"
+                                accept=".bin"
                                 style={{ display: 'none' }}
                                 id="firmware-file-input"
                                 type="file"
@@ -356,17 +511,8 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
                         {selectedFile && (
                             <Box>
                                 <Typography variant="body2" color="text.secondary" sx={{ marginBottom: '0.5em' }}>
-                                    File size: {(selectedFile.size / 1024).toFixed(2)} KB
+                                    File size: {formatBytes(selectedFile.size)}
                                 </Typography>
-                            </Box>
-                        )}
-
-                        {uploading && (
-                            <Box>
-                                <Typography variant="body2" color="text.secondary" sx={{ marginBottom: '0.5em' }}>
-                                    Upload progress: {uploadProgress}%
-                                </Typography>
-                                <LinearProgress variant="determinate" value={uploadProgress} />
                             </Box>
                         )}
 
@@ -374,10 +520,10 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
                             variant="contained"
                             color="primary"
                             onClick={handleUpload}
-                            disabled={!selectedFile || uploading}
+                            disabled={!rpc || !selectedFile || uploading}
                             fullWidth
                         >
-                            {uploading ? 'Uploading...' : 'Upload Firmware'}
+                            {busy === 'uploading' ? 'Uploading...' : 'Upload Firmware'}
                         </Button>
 
                         <Alert severity="warning">

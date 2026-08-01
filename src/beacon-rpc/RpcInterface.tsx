@@ -162,6 +162,37 @@ export type GetWifiGeoDbInfoResponse = {
     bucket_bits: number;
 }
 
+export type BeginOtaRequest = {
+    // Exact byte length of the image. The device hands this to esp_ota_begin
+    // and later refuses EndOTA until at least this many bytes have arrived.
+    size: number;
+}
+
+export type BeginOtaResponse = {
+    status?: string;
+    error?: string;
+    code?: number; // esp_err_t from the failing esp_ota_* call
+}
+
+export type UploadOtaChunkRequest = {
+    chunk: string; // base64-encoded slice of the image
+    checksum: number; // sum of the raw (pre-base64) bytes, uint32 wraparound
+}
+
+export type UploadOtaChunkResponse = {
+    written?: number;
+    total_written?: number;
+    remaining?: number;
+    error?: string;
+    code?: number;
+}
+
+export type EndOtaResponse = {
+    status?: string;
+    error?: string;
+    code?: number;
+}
+
 export default interface RpcInterface {
     getDeviceInformation(): Promise<DeviceInformation>;
 
@@ -188,6 +219,10 @@ export default interface RpcInterface {
 
     getSettings(): Promise<GetSettingsResponse>;
     updateSetting(request: UpdateSettingRequest): Promise<UpdateSettingResponse>;
+
+    beginOta(request: BeginOtaRequest): Promise<BeginOtaResponse>;
+    uploadOtaChunk(request: UploadOtaChunkRequest): Promise<UploadOtaChunkResponse>;
+    endOta(): Promise<EndOtaResponse>;
 
     // Generic call method for any RPC function, with optional parameters
     call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
@@ -239,6 +274,15 @@ export abstract class BaseRPC implements RpcInterface {
     }
     updateSetting(request: UpdateSettingRequest): Promise<UpdateSettingResponse> {
         return this.call('UpdateSetting', request);
+    }
+    beginOta(request: BeginOtaRequest): Promise<BeginOtaResponse> {
+        return this.call('BeginOTA', request);
+    }
+    uploadOtaChunk(request: UploadOtaChunkRequest): Promise<UploadOtaChunkResponse> {
+        return this.call('UploadOTAChunk', request);
+    }
+    endOta(): Promise<EndOtaResponse> {
+        return this.call('EndOTA');
     }
     getDisplayContents(): Promise<DisplayContentsResponse> {
         return this.call('GetDisplayContents');

@@ -15,6 +15,8 @@
  *     grouped by bucket in (hash, bssid) order
  */
 
+import { bytesToBase64, byteSumChecksum } from "../beacon-rpc/ChunkedPayload";
+
 const HEADER_SIZE = 32;
 const RECORD_SIZE = 10;
 const VERSION = 1;
@@ -199,15 +201,6 @@ export type GeoDbBlock = {
     offset: number;
 };
 
-function bytesToBase64(bytes: Uint8Array): string {
-    let binary = '';
-    const step = 0x8000;
-    for (let i = 0; i < bytes.length; i += step) {
-        binary += String.fromCharCode(...bytes.subarray(i, i + step));
-    }
-    return btoa(binary);
-}
-
 // Splits the built DB into device-sized blocks for InsertWifiGeoDbBlock.
 // Chunking is app-level (separate RPC calls), not just transport framing —
 // it bounds peak heap usage on the device and gives the offset guard
@@ -216,11 +209,7 @@ export function chunkWifiGeoDb(db: Uint8Array, chunkSize = 4096): GeoDbBlock[] {
     const blocks: GeoDbBlock[] = [];
     for (let offset = 0; offset < db.length; offset += chunkSize) {
         const slice = db.subarray(offset, Math.min(offset + chunkSize, db.length));
-        let checksum = 0;
-        for (let i = 0; i < slice.length; i++) {
-            checksum = (checksum + slice[i]) >>> 0;
-        }
-        blocks.push({ chunk: bytesToBase64(slice), checksum, offset });
+        blocks.push({ chunk: bytesToBase64(slice), checksum: byteSumChecksum(slice), offset });
     }
     return blocks;
 }
