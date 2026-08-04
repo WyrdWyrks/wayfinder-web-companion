@@ -160,7 +160,13 @@ function UploadProgress({ bytesSent, totalBytes, startedAt }: {
     );
 }
 
-export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?: DeviceInformation }) {
+export function Firmware({ rpc, deviceInfo, onUpdateAvailableChange }: {
+    rpc?: RpcInterface,
+    deviceInfo?: DeviceInformation,
+    // Lets the tab bar badge itself once we know whether the newest
+    // compatible release is newer than what the device is running.
+    onUpdateAvailableChange?: (available: boolean) => void,
+}) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFirmware, setSelectedFirmware] = useState<string | null>(null);
     const [busy, setBusy] = useState<null | 'downloading' | 'uploading'>(null);
@@ -207,6 +213,14 @@ export function Firmware({ rpc, deviceInfo }: { rpc?: RpcInterface, deviceInfo?:
 
         return () => controller.abort();
     }, [hardwareVersion, reloadCount]);
+
+    // Releases are newest-first, so the newest compatible one only needs
+    // comparing against what the device currently reports.
+    useEffect(() => {
+        const newest = availableFirmware[0];
+        const available = !!newest && !!deviceInfo && !versionsMatch(newest.version, deviceInfo.FirmwareVersion);
+        onUpdateAvailableChange?.(available);
+    }, [availableFirmware, deviceInfo, onUpdateAvailableChange]);
 
     const reloadFirmware = useCallback(() => setReloadCount((c) => c + 1), []);
 

@@ -11,6 +11,7 @@ import Settings from "@mui/icons-material/Settings";
 import Container from "@mui/material/Container";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Badge from "@mui/material/Badge";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import type { Theme } from "@mui/material/styles";
 import Message from "@mui/icons-material/Message";
@@ -37,6 +38,7 @@ export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onRetur
   onReturnToConnect: () => void;
 }) {
   const [tabValue, setTabValue] = React.useState(0);
+  const [firmwareUpdateAvailable, setFirmwareUpdateAvailable] = React.useState(false);
   const isWide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'));
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
@@ -53,7 +55,36 @@ export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onRetur
     { icon: <PinDrop />, label: "Locations", component: <SavedLocations rpc={rpc} /> },
     { icon: <UploadFile />, label: "Geolocation", component: <LocationImport rpc={rpc} /> },
     { icon: <Settings />, label: "Settings", component: <SettingsComponent rpc={rpc} /> },
-    { icon: <SystemUpdateAlt />, label: "Firmware", component: <Firmware deviceInfo={deviceInfo} rpc={rpc} /> },
+    {
+      icon: (
+        <Badge
+          color="error"
+          variant="dot"
+          invisible={!firmwareUpdateAvailable}
+          sx={{
+            '& .MuiBadge-dot': {
+              animation: firmwareUpdateAvailable ? 'firmware-update-pulse 1.6s ease-in-out infinite' : 'none',
+            },
+            '@keyframes firmware-update-pulse': {
+              '0%': { boxShadow: '0 0 0 0 rgba(211, 47, 47, 0.6)' },
+              '70%': { boxShadow: '0 0 0 5px rgba(211, 47, 47, 0)' },
+              '100%': { boxShadow: '0 0 0 0 rgba(211, 47, 47, 0)' },
+            },
+          }}
+        >
+          <SystemUpdateAlt />
+        </Badge>
+      ),
+      label: "Firmware",
+      sx: firmwareUpdateAvailable ? { color: 'error.main', fontWeight: 700 } : undefined,
+      component: (
+        <Firmware
+          deviceInfo={deviceInfo}
+          rpc={rpc}
+          onUpdateAvailableChange={setFirmwareUpdateAvailable}
+        />
+      ),
+    },
     ...(supportsScreenMirroring
       ? [{ icon: <ScreenShare />, label: "Screen", component: <ScreenTab rpc={rpc} deviceInfo={deviceInfo} /> }]
       : []),
@@ -76,7 +107,7 @@ export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onRetur
           centered={isWide}
         >
           {tabs.map((tab, index) => (
-            <Tab key={index} icon={tab.icon} label={tab.label} sx={{ minWidth: 72 }} />
+            <Tab key={index} icon={tab.icon} label={tab.label} sx={{ minWidth: 72, ...('sx' in tab ? tab.sx : undefined) }} />
           ))}
         </Tabs>
         {tabs[tabValue].component}
