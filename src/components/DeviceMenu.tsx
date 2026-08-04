@@ -29,6 +29,7 @@ import { SavedLocations } from "./SavedLocations";
 import { LocationImport } from "./LocationImport";
 import { Settings as SettingsComponent } from "./Settings";
 import { Firmware } from "./Firmware";
+import { useFirmwareReleases, versionsMatch } from "../firmware/FirmwareReleases";
 
 export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onReturnToConnect }: {
   rpc?: RpcInterface;
@@ -38,8 +39,17 @@ export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onRetur
   onReturnToConnect: () => void;
 }) {
   const [tabValue, setTabValue] = React.useState(0);
-  const [firmwareUpdateAvailable, setFirmwareUpdateAvailable] = React.useState(false);
   const isWide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'));
+
+  // Fetched here (not just inside the Firmware tab) so the tab can be
+  // badged as soon as a device connects, before the user ever opens it.
+  const firmwareReleaseState = useFirmwareReleases(deviceInfo?.HardwareVersion);
+  const { releases: firmwareReleases } = firmwareReleaseState;
+  // Releases are newest-first, so the newest compatible one only needs
+  // comparing against what the device currently reports.
+  const newestFirmware = firmwareReleases[0];
+  const firmwareUpdateAvailable = !!newestFirmware && !!deviceInfo
+    && !versionsMatch(newestFirmware.version, deviceInfo.FirmwareVersion);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -81,7 +91,7 @@ export function DeviceMenu({ rpc, deviceInfo, connectionMethod, offline, onRetur
         <Firmware
           deviceInfo={deviceInfo}
           rpc={rpc}
-          onUpdateAvailableChange={setFirmwareUpdateAvailable}
+          firmwareReleaseState={firmwareReleaseState}
         />
       ),
     },
