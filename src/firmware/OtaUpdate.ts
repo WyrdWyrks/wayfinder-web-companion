@@ -15,7 +15,7 @@ import { bytesToBase64, byteSumChecksum } from "../beacon-rpc/ChunkedPayload";
 // line into a ~4096-byte budget (RpcManager.h's AddRpcChannel(4096, ...));
 // base64 inflates raw bytes by ~4/3 and the JSON/msgpack wrapper adds more on
 // top, so this stays well under that — same budget the geo DB import uses.
-export const OTA_CHUNK_SIZE = 1024;
+export const OTA_CHUNK_SIZE = 4096;
 
 // A rejected checksum means the device threw the chunk away before touching
 // flash, so resending it is safe. A couple of retries covers the occasional
