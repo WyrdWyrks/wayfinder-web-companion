@@ -27,11 +27,12 @@ import { BssidScanMap } from "./ext/BssidScanMap";
 const LVCC_TEMPLATE_URL = "/data/lvcc-locations.json";
 
 // Raw bytes per InsertWifiGeoDbBlock call. The device's serial RPC channel
-// reads one Serial.readStringUntil('\n') line into a ~4096-byte budget
-// (RpcManager.h's AddRpcChannel(4096, ...)); base64 inflates raw bytes by
-// ~4/3 and the JSON wrapper ({"F":...,"chunk":"...","checksum":...,"offset":...})
-// adds more on top, so this needs to stay well under that, not at it.
-const BLOCK_SIZE = 1024;
+// reads one Serial.readStringUntil('\n') line into an 8192-byte buffer;
+// base64 inflates raw bytes by ~4/3 and the JSON wrapper
+// ({"F":...,"chunk":"...","checksum":...,"offset":...}) adds ~85 bytes on
+// top of that. 4096 raw bytes -> ~5.5 KB on the wire, comfortably under the
+// 8 KB budget while quartering the round trips a 1024-byte block needed.
+const BLOCK_SIZE = 4096;
 
 // Shape produced by the BSSID-scan query tool. `query` describes the scan
 // that generated the file; `results` is the BSSID -> location data itself.
