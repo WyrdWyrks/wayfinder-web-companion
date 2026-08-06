@@ -1,8 +1,9 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { defaultMarkerIcon } from "./leafletIcons";
+import { OsmTileLayer } from "./OsmTileLayer";
 
 const DEFAULT_CENTER: [number, number] = [20, 0];
 const DEFAULT_ZOOM = 2;
@@ -68,10 +69,7 @@ export function BssidScanMap({ points, centerMarker, height = 320 }: {
             preferCanvas
             style={{ height, width: "100%", borderRadius: 8 }}
         >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <OsmTileLayer />
             <PointsLayer points={points} centerMarker={centerMarker} />
         </MapContainer>
     );

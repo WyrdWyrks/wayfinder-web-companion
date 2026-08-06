@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SavedLocation } from "../../beacon-rpc/RpcInterface";
 import { defaultMarkerIcon as savedIcon, activeMarkerIcon as activeIcon } from "./leafletIcons";
+import { OsmTileLayer } from "./OsmTileLayer";
 
 const DEFAULT_CENTER: [number, number] = [20, 0];
 const DEFAULT_ZOOM = 2;
@@ -79,10 +80,7 @@ export function LocationsMap({ locations, activePosition, onPick, onMarkerClick,
             zoom={DEFAULT_ZOOM}
             style={{ height, width: "100%", borderRadius: 8 }}
         >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <OsmTileLayer />
             <ClickHandler onPick={onPick ? handlePick : undefined} />
             <FitBounds locations={locations} activePosition={activePosition} lastClickRef={lastClickRef} />
 
