@@ -208,9 +208,20 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
                 throw new Error(`Device rejected clear: ${clearResult.error}`);
             }
 
+            // The "Uploading block N of M..." text is only for the human watching —
+            // re-rendering the Alert on every single block adds main-thread work
+            // between awaits for no benefit once blocks are ticking by quickly, so
+            // it's throttled while the progress bar (a plain number) still updates
+            // every iteration.
+            const TEXT_UPDATE_INTERVAL_MS = 200;
+            let lastTextUpdate = 0;
             for (let i = 0; i < blocks.length; i++) {
                 const block = blocks[i];
-                setImportMessage({ type: "info", text: `Uploading block ${i + 1} of ${blocks.length}...` });
+                const now = Date.now();
+                if (now - lastTextUpdate >= TEXT_UPDATE_INTERVAL_MS || i === blocks.length - 1) {
+                    setImportMessage({ type: "info", text: `Uploading block ${i + 1} of ${blocks.length}...` });
+                    lastTextUpdate = now;
+                }
                 const result = await rpc.insertWifiGeoDbBlock({
                     chunk: block.chunk,
                     checksum: block.checksum,
