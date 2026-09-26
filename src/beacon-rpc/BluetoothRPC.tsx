@@ -8,50 +8,63 @@ const DEGEN_SERVICE_UUID = '033c3d34-8405-46db-8326-07169d5353a9';
 const RPC_CHARACTERISTIC_UUID = '033c3d37-8405-46db-8326-07169d5353a9';
 
 
+// How long to keep retrying the first encrypted read while the user types
+// the PIN shown on the beacon into the OS pairing dialog.
+const PAIRING_TIMEOUT_MS = 60_000;
+const PAIRING_RETRY_INTERVAL_MS = 1_000;
+
+async function getRpcCharacteristic(device: BluetoothDevice): Promise<BluetoothRemoteGATTCharacteristic> {
+    const gattServer = device.gatt!.connected ? device.gatt! : await device.gatt!.connect();
+    const degenService = await gattServer.getPrimaryService(DEGEN_SERVICE_UUID);
+    return degenService.getCharacteristic(RPC_CHARACTERISTIC_UUID);
+}
+
 export async function connectToBluetoothDevice(): Promise<BluetoothRPC> {
+    if (!navigator.bluetooth) {
+        throw new Error(
+            "This browser doesn't support Web Bluetooth. Use Chrome or Edge on "
+            + 'desktop or Android, or connect with Serial or WiFi instead.'
+        );
+    }
+
     const device = await navigator.bluetooth.requestDevice({
         filters: [
+            // Firmware advertises the service UUID, which matches regardless
+            // of what the user has named the device.
+            {services: [DEGEN_SERVICE_UUID]},
+            // Older firmware only fits the name in its advertisement.
+            {namePrefix: 'Wayfinder'},
             {namePrefix: 'Beacon'},
         ],
         optionalServices: [DEGEN_SERVICE_UUID],
     });
 
-    let gattServer = await device.gatt!.connect();
-    let degenService = await gattServer.getPrimaryService(DEGEN_SERVICE_UUID);
-
-    let rpcCharacteristic = await degenService.getCharacteristic(RPC_CHARACTERISTIC_UUID);
-    console.log('Connected to Bluetooth device:', device, rpcCharacteristic);
-
-    // Check if we are paired by trying to read the characteristic. If not, we
-    // need to give the user some time to pair.
-    try {
-        await rpcCharacteristic.readValue();
-    } catch (e) {
-        console.error('Error reading RPC characteristic, waiting for pairing...', e);
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        gattServer = await device.gatt!.connect();
-        degenService = await gattServer.getPrimaryService(DEGEN_SERVICE_UUID);
-        rpcCharacteristic = await degenService.getCharacteristic(RPC_CHARACTERISTIC_UUID);
-
-        // Wait either 30 seconds or until the window has focus again.
-        async function waitForFocusOrTimeout() {
-            if (document.hasFocus()) {
-                await new Promise(resolve => setTimeout(resolve, 5_000));
-            }
-
-            for (let i = 0; i < 30; i++) {
-                if (document.hasFocus()) {
-                    return;
-                }
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+    // The RPC characteristic requires an authenticated link, so the first
+    // read fails until the user has entered the PIN shown on the beacon.
+    // Keep retrying (reconnecting if pairing dropped the link) until a read
+    // succeeds, rather than guessing how long pairing takes.
+    const deadline = Date.now() + PAIRING_TIMEOUT_MS;
+    let lastError: unknown;
+    while (Date.now() < deadline) {
+        try {
+            const rpcCharacteristic = await getRpcCharacteristic(device);
+            await rpcCharacteristic.readValue();
+            console.log('Connected to Bluetooth device:', device, rpcCharacteristic);
+            return new BluetoothRPC(device, rpcCharacteristic);
+        } catch (e) {
+            lastError = e;
+            console.warn('RPC characteristic not readable yet, waiting for pairing...', e);
+            await new Promise(resolve => setTimeout(resolve, PAIRING_RETRY_INTERVAL_MS));
         }
-        await waitForFocusOrTimeout();
     }
 
-    return new BluetoothRPC(device, rpcCharacteristic);
+    console.error('Bluetooth pairing did not complete:', lastError);
+    device.gatt?.disconnect();
+    throw new Error(
+        'Pairing with the beacon did not complete. Keep the Pair Bluetooth screen '
+        + 'open and enter the PIN it shows. If this beacon was paired before, remove '
+        + "it from your computer or phone's Bluetooth settings and try again."
+    );
 };
 
 const MAX_BLE_CHUNK_SIZE = 500;
@@ -59,6 +72,10 @@ const MAX_BLE_CHUNK_SIZE = 500;
 class BluetoothRPC extends BaseRPC {
     device: BluetoothDevice;
     rpcCharacteristic: BluetoothRemoteGATTCharacteristic;
+    // Each call is a write-then-read exchange on a single characteristic, so
+    // overlapping calls would interleave chunks (or trip Chrome's "GATT
+    // operation already in progress"). Calls are chained through this.
+    private queue: Promise<unknown> = Promise.resolve();
 
     constructor(device: BluetoothDevice, rpcCharacteristic: BluetoothRemoteGATTCharacteristic) {
         super();
@@ -74,7 +91,13 @@ class BluetoothRPC extends BaseRPC {
         this.device.gatt?.disconnect();
     }
 
-    async call<T>(functionName: string, params: Record<string, unknown> = {}): Promise<T> {
+    call<T>(functionName: string, params: Record<string, unknown> = {}): Promise<T> {
+        const result = this.queue.then(() => this.callUnqueued<T>(functionName, params));
+        this.queue = result.catch(() => undefined);
+        return result;
+    }
+
+    private async callUnqueued<T>(functionName: string, params: Record<string, unknown>): Promise<T> {
         const body = { 'F': functionName, ...params };
         const data = encode(body);
 

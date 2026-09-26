@@ -164,7 +164,13 @@ export default function ConnectCard({ setBeacon }: { setBeacon: React.Dispatch<R
                       </Typography>
                       <Typography sx={{mt: 1}} variant='body2'>
                         After pressing the <b>Connect</b> button, select
-                        your beacon and pair it with the PIN code shown on the beacon.
+                        your beacon (listed by its device name, e.g. <b>Wayfinder_1A2B</b>) and
+                        pair it with the PIN code shown on the beacon. Keep the Pair Bluetooth
+                        screen open until you're connected.
+                      </Typography>
+                      <Typography sx={{mt: 1}} variant='body2' color='text.secondary'>
+                        If it was paired before and won't connect now, remove it from your
+                        computer or phone's Bluetooth settings and try again.
                       </Typography>
 
                       <FormGroup sx={{ mt: 4 }}>
