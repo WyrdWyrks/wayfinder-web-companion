@@ -12,6 +12,10 @@ export class ErrorHandlingRPC extends BaseRPC {
         this.onError = onError;
     }
 
+    get maxUploadBlockBytes(): number {
+        return this.inner.maxUploadBlockBytes;
+    }
+
     async getDeviceInformation(): Promise<DeviceInformation> {
         try {
             return await this.inner.getDeviceInformation();

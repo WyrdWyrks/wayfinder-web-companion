@@ -200,7 +200,7 @@ export function LocationImport({ rpc }: { rpc?: RpcInterface }) {
             }
 
             const { db, recordCount } = buildWifiGeoDb(records);
-            const blocks = chunkWifiGeoDb(db, BLOCK_SIZE);
+            const blocks = chunkWifiGeoDb(db, Math.min(BLOCK_SIZE, rpc.maxUploadBlockBytes));
 
             setImportMessage({ type: "info", text: "Clearing existing WiFi geo DB on device..." });
             const clearResult = await rpc.clearWifiGeoDb();

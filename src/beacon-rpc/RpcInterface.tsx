@@ -224,6 +224,11 @@ export default interface RpcInterface {
     uploadOtaChunk(request: UploadOtaChunkRequest): Promise<UploadOtaChunkResponse>;
     endOta(): Promise<EndOtaResponse>;
 
+    // Largest raw (pre-base64) payload one upload RPC (UploadOTAChunk,
+    // InsertWifiGeoDbBlock) should carry, sized so the encoded request fits
+    // the transport's receive buffer on the device.
+    readonly maxUploadBlockBytes: number;
+
     // Generic call method for any RPC function, with optional parameters
     call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
 }
@@ -231,6 +236,12 @@ export default interface RpcInterface {
 export abstract class BaseRPC implements RpcInterface {
     abstract getDeviceInformation(): Promise<DeviceInformation>;
     abstract call<T>(functionName: string, params?: Record<string, unknown>): Promise<T>;
+
+    // Serial reads each request into an 8 KB line buffer, which fits 4096 raw
+    // bytes once base64-encoded and wrapped (~5.5 KB).
+    get maxUploadBlockBytes(): number {
+        return 4096;
+    }
 
     async disconnect(): Promise<void> {
         // No exclusive resource to release by default.

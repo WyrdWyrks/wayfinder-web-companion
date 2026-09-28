@@ -11,10 +11,10 @@ import type RpcInterface from "../beacon-rpc/RpcInterface";
 import type { UploadOtaChunkResponse } from "../beacon-rpc/RpcInterface";
 import { bytesToBase64, byteSumChecksum } from "../beacon-rpc/ChunkedPayload";
 
-// Raw image bytes per UploadOTAChunk call. The serial RPC channel reads one
-// line into a ~4096-byte budget (RpcManager.h's AddRpcChannel(4096, ...));
-// base64 inflates raw bytes by ~4/3 and the JSON/msgpack wrapper adds more on
-// top, so this stays well under that — same budget the geo DB import uses.
+// Upper bound on raw image bytes per UploadOTAChunk call; the transport's
+// maxUploadBlockBytes can lower it (Bluetooth uses smaller chunks). base64
+// inflates raw bytes by ~4/3 and the msgpack/JSON wrapper adds more on top —
+// same budget the geo DB import uses.
 export const OTA_CHUNK_SIZE = 4096;
 
 // A rejected checksum means the device threw the chunk away before touching
@@ -89,11 +89,12 @@ export async function uploadFirmware(
         throw new Error(withCode(`Device refused to start the update: ${begin.error}`, begin.code));
     }
 
-    const chunkCount = Math.ceil(image.length / OTA_CHUNK_SIZE);
+    const chunkSize = Math.min(OTA_CHUNK_SIZE, rpc.maxUploadBlockBytes);
+    const chunkCount = Math.ceil(image.length / chunkSize);
     let bytesSent = 0;
 
     for (let i = 0; i < chunkCount; i++) {
-        const slice = image.subarray(i * OTA_CHUNK_SIZE, Math.min((i + 1) * OTA_CHUNK_SIZE, image.length));
+        const slice = image.subarray(i * chunkSize, Math.min((i + 1) * chunkSize, image.length));
         const response = await uploadChunk(rpc, {
             chunk: bytesToBase64(slice),
             checksum: byteSumChecksum(slice),

@@ -68,6 +68,10 @@ export async function connectToBluetoothDevice(): Promise<BluetoothRPC> {
 };
 
 const MAX_BLE_CHUNK_SIZE = 500;
+// The firmware reassembles each request into a 4096-byte buffer
+// (MAX_BLE_RPC_PACKET_SIZE in BluetoothUtilities.hpp) and drops anything
+// larger. Leave headroom under it.
+const MAX_BLE_REQUEST_SIZE = 4000;
 
 class BluetoothRPC extends BaseRPC {
     device: BluetoothDevice;
@@ -76,6 +80,12 @@ class BluetoothRPC extends BaseRPC {
     // overlapping calls would interleave chunks (or trip Chrome's "GATT
     // operation already in progress"). Calls are chained through this.
     private queue: Promise<unknown> = Promise.resolve();
+
+    // 2048 raw bytes -> ~2.8 KB once base64-encoded and wrapped, safely under
+    // MAX_BLE_REQUEST_SIZE.
+    get maxUploadBlockBytes(): number {
+        return 2048;
+    }
 
     constructor(device: BluetoothDevice, rpcCharacteristic: BluetoothRemoteGATTCharacteristic) {
         super();
@@ -100,6 +110,12 @@ class BluetoothRPC extends BaseRPC {
     private async callUnqueued<T>(functionName: string, params: Record<string, unknown>): Promise<T> {
         const body = { 'F': functionName, ...params };
         const data = encode(body);
+        if (data.byteLength > MAX_BLE_REQUEST_SIZE) {
+            throw new Error(
+                `${functionName} request is ${data.byteLength} bytes, larger than the `
+                + `${MAX_BLE_REQUEST_SIZE} bytes the device accepts over Bluetooth.`
+            );
+        }
 
         // Send in chunks of MAX_BLE_CHUNK_SIZE, start a chunk with 1 if more
         // chunks are coming, 0 if it's the last chunk
@@ -119,6 +135,11 @@ class BluetoothRPC extends BaseRPC {
         const dataChunks = [];
         while (true) {
             const value = await this.rpcCharacteristic.readValue();
+            if (value.byteLength === 0) {
+                // The device had no response ready: it couldn't parse the
+                // request (e.g. it overflowed its buffer) and never replied.
+                throw new Error(`${functionName} got no response from the device over Bluetooth.`);
+            }
             const moreChunks = value.getUint8(0) === 1;
             const chunk = new Uint8Array(value.byteLength - 1);
             chunk.set(new Uint8Array(value.buffer.slice(1)));
