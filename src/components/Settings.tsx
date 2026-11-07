@@ -110,8 +110,7 @@ export function SettingItem({ name, setting, rpc, onSaved }: {
         // For enums, show the friendly label
         if (setting.cfgType === 'enum') {
             const enumSetting = setting as ConfigurableEnumConfigValue;
-            const valueIndex = enumSetting.vals.indexOf(enumSetting.cfgVal as number);
-            return enumSetting.valTxt[valueIndex];
+            return enumSetting.valTxt[enumSetting.cfgVal] ?? String(enumSetting.cfgVal);
         }
         
         return String(setting.cfgVal);
@@ -185,7 +184,7 @@ export function SettingItem({ name, setting, rpc, onSaved }: {
                     <FormControl fullWidth size="small">
                         <Select value={editValue} onChange={(e) => setEditValue(e.target.value as number)}>
                             {enumSetting.vals.map((val, idx) => (
-                                <MenuItem key={val} value={val}>{enumSetting.valTxt[idx]} ({val})</MenuItem>
+                                <MenuItem key={val} value={idx}>{enumSetting.valTxt[idx]} ({val})</MenuItem>
                             ))}
                         </Select>
                     </FormControl>

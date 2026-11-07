@@ -81,7 +81,7 @@ export type ConfigurableStringConfigValue = {
 
 export type ConfigurableEnumConfigValue = {
     cfgType: 'enum',
-    cfgVal: number,
+    cfgVal: number, // index into vals/valTxt, not the value itself; UpdateSetting takes an index too
 
     vals: number[],
     valTxt: string[],
